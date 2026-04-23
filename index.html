@@ -772,10 +772,62 @@ skills:
         </div>
       </article>
 
-      <!-- Slide 11: 언제 이득/손해 -->
+      <!-- Slide 11: 실측 비교 -->
       <article class="slide">
         <header class="slide-head">
           <span class="slide-kicker">SECTION 10</span>
+          <h2>실측 비교 — Serena vs 표준 경로</h2>
+          <p class="slide-sub">같은 탐색 목표, 약 8~9배 토큰 차이 (2026-04-24 실측)</p>
+        </header>
+        <div class="tools-table">
+          <p style="margin-bottom: 10px; font-size: 13px; color: var(--text-2);">
+            <b>태스크</b>: CTA 뷰어 show/hide 버튼 수정 &nbsp;|&nbsp;
+            <b>탐색 타깃</b>: <code>handleToggleVisualization</code> + <code>isVisualizationOpen</code> &nbsp;|&nbsp;
+            <b>대상</b>: CTAMultiViewer.tsx (1,051줄), ResultViewer.tsx (594줄)
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>단계</th>
+                <th>Serena 경로</th>
+                <th>표준 경로 (Glob → Grep → Read)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>파일/심볼 탐색</td>
+                <td><code>find_symbol</code> → ~4,400자</td>
+                <td><code>Glob</code> × 3 → ~800자</td>
+              </tr>
+              <tr>
+                <td>구조 파악</td>
+                <td><code>get_symbols_overview</code> × 2 → ~5,000자</td>
+                <td><code>Read(CTAMultiViewer.tsx)</code> → <b>~52,000자</b></td>
+              </tr>
+              <tr>
+                <td>타깃 코드 읽기</td>
+                <td><code>find_symbol(include_body=True)</code> → ~100자</td>
+                <td><code>Read(ResultViewer.tsx)</code> → <b>~30,000자</b></td>
+              </tr>
+              <tr style="font-weight: 700;">
+                <td>합계</td>
+                <td style="color: var(--green, #4ade80);">~9,500자 ≈ ~2,400 토큰</td>
+                <td style="color: var(--red, #f87171);">~83,000자 ≈ ~20,750 토큰</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="insight">
+          💡 표준 경로는 함수 하나를 찾기 위해 <b>파일 전체</b>를 컨텍스트에 올린다.
+          Serena는 심볼 트리에서 위치를 파악한 뒤 그 함수 본문만 읽어
+          파일 크기와 무관하게 토큰이 낮다. planner가 Opus로 실행되는 구조에서는 이 차이가 <b>비용에 직접 기여</b>한다.
+        </p>
+      </article>
+
+      <!-- Slide 12: 언제 이득/손해 -->
+      <article class="slide">
+        <header class="slide-head">
+          <span class="slide-kicker">SECTION 11</span>
           <h2>언제 이득이고 언제 손해인가</h2>
           <p class="slide-sub">솔직한 평가 — 항상 싸지는 건 아니다</p>
         </header>
@@ -801,10 +853,10 @@ skills:
         </div>
       </article>
 
-      <!-- Slide 12: 설정 최소 요구사항 -->
+      <!-- Slide 13: 설정 최소 요구사항 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 11</span>
+          <span class="slide-kicker">SECTION 12</span>
           <h2>설정 최소 요구사항</h2>
           <p class="slide-sub">마크다운 파일 몇 개가 전부다</p>
         </header>
