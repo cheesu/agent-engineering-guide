@@ -2253,6 +2253,69 @@ pre code {
   border-bottom: 1px dashed var(--cyan);
 }
 
+/* ═══════════════════════ Tooltip System ═══════════════════════ */
+
+.tooltip-term {
+  border-bottom: 1px dashed var(--accent);
+  cursor: help;
+  color: inherit;
+  transition: color 0.15s ease;
+}
+
+.tooltip-term:hover {
+  color: var(--accent);
+}
+
+/* File extension variant — cyan to match code/terminal aesthetic */
+.ext-tip {
+  border-bottom: 1px dashed var(--cyan);
+  cursor: help;
+  color: var(--cyan);
+  transition: opacity 0.15s ease;
+}
+
+.ext-tip:hover {
+  opacity: 0.75;
+}
+
+#tooltip-bubble {
+  position: fixed;
+  z-index: 300;
+  max-width: 340px;
+  padding: 10px 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-strong);
+  border-top: 2px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 140, 66, 0.08);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  font-weight: 400;
+  color: var(--text-1);
+  line-height: 1.65;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  letter-spacing: 0;
+}
+
+#tooltip-bubble.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#tooltip-bubble .tt-name {
+  display: block;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 /* ═══════════════════════ Responsive Breakpoints ═══════════════════════ */
 
 /* Large screens — cap max width for readability */
