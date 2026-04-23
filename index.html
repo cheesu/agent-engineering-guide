@@ -55,7 +55,7 @@
           <div class="cover-meta">
             <div><span>대상</span> NEO Frontend / HQN</div>
             <div><span>오케스트레이터</span> Claude Code CLI</div>
-            <div><span>에이전트</span> Planner · Implementer · Reviewer</div>
+            <div><span>실행 역할</span> Planner · Main Claude · Reviewer</div>
           </div>
         </div>
       </article>
@@ -65,7 +65,7 @@
         <header class="slide-head">
           <span class="slide-kicker">SECTION 1</span>
           <h2>전체 워크플로우 한눈에</h2>
-          <p class="slide-sub">한 마디 자연어 입력으로 다단계 에이전트 파이프라인이 흐른다</p>
+          <p class="slide-sub">한 마디 자연어 입력으로 다단계 실행 파이프라인이 흐른다</p>
         </header>
         <div class="flow-chart">
           <div class="flow-node user">"일해라"</div>
@@ -79,8 +79,8 @@
             </div>
             <div class="flow-arrow right">→</div>
             <div class="flow-node agent sonnet">
-              <b>Implementer (Sonnet)</b>
-              <span>파일 수정 · lint · 빌드</span>
+              <b>Main Claude 구현 (Sonnet)</b>
+              <span>핸드오프 기반 파일 수정 · lint · 빌드</span>
             </div>
             <div class="flow-arrow right">→</div>
             <div class="flow-node agent opus">
@@ -115,7 +115,7 @@
             <h3>에이전트</h3>
             <ul>
               <li>planner-opus-4_6 (분석/계획)</li>
-              <li>implementer-sonnet (구현)</li>
+              <li>main Claude (Sonnet 구현)</li>
               <li>reviewer-opus-4_6 (리뷰)</li>
             </ul>
           </div>
@@ -179,8 +179,8 @@
       <article class="slide">
         <header class="slide-head">
           <span class="slide-kicker">SECTION 4</span>
-          <h2>에이전트 3종 역할 분담</h2>
-          <p class="slide-sub">독립 컨텍스트 서브프로세스로 실행, 도구 접근도 분리</p>
+          <h2>역할 3종 분담</h2>
+          <p class="slide-sub">planner/reviewer는 서브에이전트, 구현은 기본 플로우에서 메인 세션이 담당</p>
         </header>
         <div class="agent-cards">
           <div class="agent-card planner">
@@ -205,20 +205,20 @@
           <div class="agent-card implementer">
             <div class="agent-header">
               <span class="agent-model">SONNET 4.6</span>
-              <h3>Implementer</h3>
+              <h3>Main Claude 구현</h3>
             </div>
             <div class="agent-body">
               <p><b>하는 일</b></p>
               <ul>
-                <li>플랜에 따른 파일 수정/생성</li>
+                <li>플래너 핸드오프 기반 파일 수정/생성</li>
                 <li>lint · build 검증</li>
-                <li>토큰 볼륨이 가장 큰 구간</li>
+                <li>기본 pickup/finish 플로우에선 별도 스폰 안 됨</li>
               </ul>
               <p><b>도구</b></p>
               <div class="tool-tags">
                 <span>Read</span><span>Glob</span><span>Grep</span><span>Edit</span><span>Write</span><span>Bash</span>
               </div>
-              <p class="no-tools">❌ WebFetch 없음 — 외부 참조 차단</p>
+              <p class="no-tools">ℹ️ implementer-sonnet 정의는 존재하지만 기본 흐름에서는 메인 Claude가 직접 구현</p>
             </div>
           </div>
           <div class="agent-card reviewer">
@@ -308,7 +308,7 @@
 <span class="prompt">&gt;</span> <span class="user-input">네</span>
 
 <span class="ai-out">[planner-opus-4_6] Serena로 CTAMultiViewer 심볼 탐색...</span>
-<span class="ai-out">[implementer-sonnet] 2개 파일 수정 완료 · lint 통과</span>
+<span class="ai-out">[main-sonnet] 핸드오프 기준 2개 파일 수정 완료 · lint 통과</span>
 
 <span class="prompt">&gt;</span> <span class="user-input">마무리</span>
 
@@ -402,10 +402,65 @@
         </div>
       </article>
 
-      <!-- Slide 2: 핵심 메커니즘 -->
+      <!-- Slide 2: 개념 정리 -->
       <article class="slide">
         <header class="slide-head">
           <span class="slide-kicker">SECTION 1</span>
+          <h2>먼저 개념부터 정리</h2>
+          <p class="slide-sub">오케스트레이터, 서브에이전트, 팀 에이전트는 서로 다른 레이어의 말이다</p>
+        </header>
+        <div class="two-col">
+          <div>
+            <h4>개념 맵</h4>
+            <ul class="pill-list">
+              <li>메인 Claude = 오케스트레이터</li>
+              <li>CLAUDE.md / skill = 호출 규칙서</li>
+              <li>서브에이전트 = Agent 도구로 띄운 독립 프로세스</li>
+              <li>팀 에이전트 / 멀티에이전트 = 같은 패턴의 다른 표현</li>
+            </ul>
+          </div>
+          <div>
+            <h4>구분해서 보면 쉬워진다</h4>
+            <div class="code-block">
+<pre>메인 Claude       = 사용자와 대화하는 오케스트레이터
+CLAUDE.md / skill = "언제 누구를 호출할지" 적힌 규칙
+서브에이전트      = 메인이 Agent 도구로 스폰한 별도 프로세스
+모델 스플릿       = 역할별 모델을 다르게 배치한 최적화 레이어</pre>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Slide 3: 실제 실행 흐름 -->
+      <article class="slide">
+        <header class="slide-head">
+          <span class="slide-kicker">SECTION 2</span>
+          <h2>이 프로젝트의 실제 실행 흐름</h2>
+          <p class="slide-sub">planner와 reviewer만 서브에이전트로 스폰되고 구현은 메인 세션이 맡는다</p>
+        </header>
+        <div class="code-block">
+<pre>사용자: "일해라"
+    ↓
+[메인 Claude (Sonnet)]  ← 오케스트레이터
+    ├─ planner-opus-4_6   → 서브에이전트로 스폰
+    └─ 메인 세션 직접 구현 → implementer-sonnet 자동 스폰 없음
+
+사용자: "마무리"
+    ↓
+[메인 Claude (Sonnet)]
+    ├─ reviewer-opus-4_6 → 서브에이전트로 스폰
+    └─ 커밋 / 푸시 / PR   → 메인 세션 직접 실행</pre>
+        </div>
+        <p class="insight">
+          기본 pickup/finish 흐름에서는 <b>planner와 reviewer만 실제 스폰</b>되고,
+          구현은 <b>메인 Claude(Sonnet)</b>가 직접 담당한다.
+        </p>
+      </article>
+
+      <!-- Slide 4: 핵심 메커니즘 -->
+      <article class="slide">
+        <header class="slide-head">
+          <span class="slide-kicker">SECTION 3</span>
           <h2>핵심 메커니즘</h2>
           <p class="slide-sub">Agent 도구가 파일의 frontmatter를 읽어 독립 프로세스를 스폰한다</p>
         </header>
@@ -444,10 +499,10 @@
         </div>
       </article>
 
-      <!-- Slide 3: 에이전트 파일 구조 -->
+      <!-- Slide 5: 에이전트 파일 구조 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 2</span>
+          <span class="slide-kicker">SECTION 4</span>
           <h2>에이전트 정의 파일 예시</h2>
           <p class="slide-sub">마크다운 frontmatter 하나로 모델/도구/스킬이 고정된다</p>
         </header>
@@ -489,10 +544,10 @@ skills:
         </div>
       </article>
 
-      <!-- Slide 4: 모델 결정 우선순위 -->
+      <!-- Slide 6: 모델 결정 우선순위 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 3</span>
+          <span class="slide-kicker">SECTION 5</span>
           <h2>모델 결정 우선순위</h2>
           <p class="slide-sub">위에서 아래로 — 먼저 매칭된 규칙이 이긴다</p>
         </header>
@@ -534,12 +589,16 @@ skills:
             </div>
           </li>
         </ol>
+        <p class="insight">
+          실제 적용은 frontmatter가 담당하지만, <b>실행 주체</b>는 별개다.
+          <b>implementer-sonnet 정의가 있어도 기본 플로우에서는 메인 세션이 직접 구현</b>한다.
+        </p>
       </article>
 
-      <!-- Slide 5: 도구 제한 설계 -->
+      <!-- Slide 7: 도구 제한 설계 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 4</span>
+          <span class="slide-kicker">SECTION 6</span>
           <h2>도구 접근 범위도 함께 분리</h2>
           <p class="slide-sub">모델 판단을 믿는 게 아니라 도구 접근 자체를 차단한다</p>
         </header>
@@ -577,10 +636,71 @@ skills:
         </p>
       </article>
 
-      <!-- Slide 6: 가성비의 근거 -->
+      <!-- Slide 8: 구현 주체 트레이드오프 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 5</span>
+          <span class="slide-kicker">SECTION 7</span>
+          <h2>메인 직접 구현 vs implementer 자동 스폰</h2>
+          <p class="slide-sub">기술적으로 둘 다 가능하지만 컨텍스트와 개입 방식이 달라진다</p>
+        </header>
+        <div class="tools-table">
+          <table>
+            <thead>
+              <tr>
+                <th>항목</th>
+                <th>현재 (메인이 직접 구현)</th>
+                <th>implementer 자동 스폰</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>컨텍스트</td>
+                <td>메인이 대화 전체 기억</td>
+                <td>서브에이전트는 핸드오프만 봄</td>
+              </tr>
+              <tr>
+                <td>집중도</td>
+                <td>대화 맥락까지 함께 보며 구현</td>
+                <td>핸드오프 중심으로 잡음 없이 구현</td>
+              </tr>
+              <tr>
+                <td>사용자 개입</td>
+                <td>구현 중 메인에게 질문 가능</td>
+                <td>서브에이전트 종료 후에야 소통</td>
+              </tr>
+              <tr>
+                <td>중단 처리</td>
+                <td>즉시 가능</td>
+                <td>서브에이전트 실행 중엔 어려움</td>
+              </tr>
+              <tr>
+                <td>비용</td>
+                <td>추가 컨텍스트 초기화 없음</td>
+                <td>서브에이전트 컨텍스트 초기화 비용 추가</td>
+              </tr>
+              <tr>
+                <td>장점</td>
+                <td>즉시 질문, 방향 수정, 예외 대응이 유연함</td>
+                <td>도구 제한이 명확하고 결과가 독립 리포트로 정리됨</td>
+              </tr>
+              <tr>
+                <td>리스크</td>
+                <td>컨텍스트가 길어지면 핸드오프가 희석될 수 있음</td>
+                <td>대화 맥락 손실 시 잘못된 방향으로 완주할 수 있음</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="insight">
+          구현이 단순하고 핸드오프만으로 완결되면 자동 스폰이 깔끔하고,
+          예외 상황이나 사용자 소통이 잦으면 <b>메인이 직접 구현</b>하는 편이 더 유연하다.
+        </p>
+      </article>
+
+      <!-- Slide 9: 가성비의 근거 -->
+      <article class="slide">
+        <header class="slide-head">
+          <span class="slide-kicker">SECTION 8</span>
           <h2>가성비의 근거 — 토큰 볼륨 비대칭</h2>
           <p class="slide-sub">고볼륨 작업이 Sonnet으로, 저볼륨 판단 작업이 Opus로</p>
         </header>
@@ -625,10 +745,10 @@ skills:
         </p>
       </article>
 
-      <!-- Slide 7: Serena 상승효과 -->
+      <!-- Slide 10: Serena 상승효과 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 6</span>
+          <span class="slide-kicker">SECTION 9</span>
           <h2>Serena MCP와의 상승효과</h2>
           <p class="slide-sub">Opus 비용을 억제하는 결정적 요인</p>
         </header>
@@ -642,7 +762,7 @@ skills:
             <p>planner(Opus)가 전체 파일을 읽어야 해서 토큰 급증 → 가성비 이득 상쇄</p>
           </div>
           <div class="serena-col with">
-            <h4>Serena 있이</h4>
+            <h4>Serena 있을 때</h4>
             <div class="viz">
               <div class="viz-bar opus-bar small"></div>
               <div class="viz-label">Opus 토큰 최소화 ✅</div>
@@ -652,10 +772,10 @@ skills:
         </div>
       </article>
 
-      <!-- Slide 8: 언제 이득/손해 -->
+      <!-- Slide 11: 언제 이득/손해 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 7</span>
+          <span class="slide-kicker">SECTION 10</span>
           <h2>언제 이득이고 언제 손해인가</h2>
           <p class="slide-sub">솔직한 평가 — 항상 싸지는 건 아니다</p>
         </header>
@@ -681,10 +801,10 @@ skills:
         </div>
       </article>
 
-      <!-- Slide 9: 설정 최소 요구사항 -->
+      <!-- Slide 12: 설정 최소 요구사항 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">SECTION 8</span>
+          <span class="slide-kicker">SECTION 11</span>
           <h2>설정 최소 요구사항</h2>
           <p class="slide-sub">마크다운 파일 몇 개가 전부다</p>
         </header>
@@ -710,7 +830,7 @@ skills:
         </p>
       </article>
 
-      <!-- Slide 10: 마무리 -->
+      <!-- Slide 13: 마무리 -->
       <article class="slide end-slide">
         <div class="end-inner">
           <div class="end-kicker">TAB 02 · Model Split</div>
