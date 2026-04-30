@@ -54,8 +54,8 @@
           </p>
           <div class="cover-meta">
             <div><span>대상</span> NEO Frontend / HQN</div>
-            <div><span>오케스트레이터</span> Claude Code CLI</div>
-            <div><span>실행 역할</span> Planner · Main Claude · Reviewer</div>
+            <div><span>오케스트레이터</span> 메인 Claude (Sonnet)</div>
+            <div><span>실행 역할</span> Planner · Implementer · Reviewer</div>
           </div>
         </div>
       </article>
@@ -70,26 +70,26 @@
         <div class="flow-chart">
           <div class="flow-node user">"일해라"</div>
           <div class="flow-arrow">↓</div>
-          <div class="flow-node router">CLAUDE.md 자연어 라우팅</div>
+          <div class="flow-node router">메인 오케스트레이터 (Sonnet)<br/><span style="font-size:12px;font-weight:400;opacity:.9">CLAUDE.md 라우팅 · ADO · 확인 게이트 · handoff/review_findings 저장</span></div>
           <div class="flow-arrow">↓</div>
           <div class="flow-row">
             <div class="flow-node agent opus">
               <b>Planner (Opus)</b>
-              <span>ADO 조회 · 코드 분석 · 계획</span>
+              <span>Serena 분석 · 핸드오프 텍스트 반환</span>
             </div>
             <div class="flow-arrow right">→</div>
             <div class="flow-node agent sonnet">
-              <b>Main Claude 구현 (Sonnet)</b>
-              <span>핸드오프 기반 파일 수정 · lint · 빌드</span>
+              <b>Implementer (Sonnet)</b>
+              <span>handoff.md 읽고 구현 · scoped lint · tsc</span>
             </div>
             <div class="flow-arrow right">→</div>
             <div class="flow-node agent opus">
               <b>Reviewer (Opus)</b>
-              <span>변경 리뷰 · guardrails 검증</span>
+              <span>Preflight 후 git diff 리뷰 · verdict</span>
             </div>
           </div>
           <div class="flow-arrow">↓</div>
-          <div class="flow-node final">커밋 → Push → Draft PR 생성</div>
+          <div class="flow-node final">finish_approval → 커밋 · Push · Draft PR</div>
         </div>
       </article>
 
@@ -115,16 +115,16 @@
             <h3>에이전트</h3>
             <ul>
               <li>planner-opus-4_6 (분석/계획)</li>
-              <li>main Claude (Sonnet 구현)</li>
-              <li>reviewer-opus-4_6 (리뷰)</li>
+              <li>implementer-sonnet (구현)</li>
+              <li>reviewer-opus-4_6 (git diff 리뷰)</li>
             </ul>
           </div>
           <div class="stack-card">
             <div class="stack-icon">📚</div>
             <h3>스킬 (Skills)</h3>
             <ul>
-              <li>hqn-ado-pickup-task</li>
-              <li>hqn-ado-finish-task</li>
+              <li>hqn-ado-pickup-task / finish</li>
+              <li>pickup · finish · tasks (단축 라우팅)</li>
               <li>hqn-frontend-guardrails</li>
             </ul>
           </div>
@@ -179,9 +179,12 @@
       <article class="slide">
         <header class="slide-head">
           <span class="slide-kicker">SECTION 4</span>
-          <h2>역할 3종 분담</h2>
-          <p class="slide-sub">planner/reviewer는 서브에이전트, 구현은 기본 플로우에서 메인 세션이 담당</p>
+          <h2>역할 분담</h2>
+          <p class="slide-sub">메인은 라우팅·게이트·<code>.claude/state/</code> 저장 — planner/implementer/reviewer는 Agent 도구로 스폰</p>
         </header>
+        <p class="insight" style="margin-bottom: 16px;">
+          planner·reviewer는 텍스트만 반환하고 파일 쓰기 금지(<code>disallowedTools</code>). 오케스트레이터가 <code>handoff.md</code> / <code>review_findings.md</code>에 저장해 메인 컨텍스트 중복을 줄인다.
+        </p>
         <div class="agent-cards">
           <div class="agent-card planner">
             <div class="agent-header">
@@ -191,9 +194,9 @@
             <div class="agent-body">
               <p><b>하는 일</b></p>
               <ul>
-                <li>ADO Work Item 조회/분석</li>
                 <li>Serena로 코드베이스 탐색</li>
-                <li>구현 핸드오프 문서 작성</li>
+                <li>구현 계획(핸드오프) 텍스트 반환</li>
+                <li>오케스트레이터가 <code>handoff.md</code>에 저장</li>
               </ul>
               <p><b>도구</b></p>
               <div class="tool-tags">
@@ -205,20 +208,20 @@
           <div class="agent-card implementer">
             <div class="agent-header">
               <span class="agent-model">SONNET 4.6</span>
-              <h3>Main Claude 구현</h3>
+              <h3>Implementer</h3>
             </div>
             <div class="agent-body">
               <p><b>하는 일</b></p>
               <ul>
-                <li>플래너 핸드오프 기반 파일 수정/생성</li>
-                <li>lint · build 검증</li>
-                <li>기본 pickup/finish 플로우에선 별도 스폰 안 됨</li>
+                <li><code>handoff.md</code> 읽고 구현</li>
+                <li>scoped lint · <code>yarn tsc --noEmit</code></li>
+                <li>not ready 시 <code>review_findings.md</code> 반영 후 재스폰(1회)</li>
               </ul>
               <p><b>도구</b></p>
               <div class="tool-tags">
                 <span>Read</span><span>Glob</span><span>Grep</span><span>Edit</span><span>Write</span><span>Bash</span>
               </div>
-              <p class="no-tools">ℹ️ implementer-sonnet 정의는 존재하지만 기본 흐름에서는 메인 Claude가 직접 구현</p>
+              <p class="no-tools">서브에이전트로 스폰 · 고볼륨 코드 작업은 Sonnet에 집중</p>
             </div>
           </div>
           <div class="agent-card reviewer">
@@ -229,9 +232,9 @@
             <div class="agent-body">
               <p><b>하는 일</b></p>
               <ul>
-                <li>변경사항 전체 리뷰</li>
-                <li>guardrails 준수 확인</li>
-                <li>커밋/PR 전 최종 게이트</li>
+                <li>Deterministic Preflight 통과 후 스폰</li>
+                <li><code>git diff</code> 기반 리뷰(전체 Read 최소화)</li>
+                <li>verdict: ready / ready with caveats / not ready</li>
               </ul>
               <p><b>도구</b></p>
               <div class="tool-tags">
@@ -296,29 +299,27 @@
         <div class="terminal-box">
 <pre><span class="prompt">&gt;</span> <span class="user-input">일해라</span>
 
-<span class="ai-out">→ ADO MCP: wit_my_work_items</span>
+<span class="ai-out">→ 메인: ADO MCP wit_my_work_items</span>
 <span class="ai-out">  #68900  CTA 3D 렌더링 프리셋 기능 구현</span>
-<span class="ai-out">  #68901  세그멘테이션 투명도 슬라이더 개선</span>
 
 <span class="prompt">&gt;</span> <span class="user-input">68900</span>
-
-<span class="ai-out">✓ 브랜치 feature/hqn/68900-cta-preset 생성할까요?</span>
-<span class="gate">── 확인 게이트 #1 ──</span>
-
+<span class="gate">── 확인 게이트 #1 · 브랜치 생성 전 ──</span>
 <span class="prompt">&gt;</span> <span class="user-input">네</span>
 
-<span class="ai-out">[planner-opus-4_6] Serena로 CTAMultiViewer 심볼 탐색...</span>
-<span class="ai-out">[main-sonnet] 핸드오프 기준 2개 파일 수정 완료 · lint 통과</span>
+<span class="ai-out">[planner-opus-4_6] Serena 심볼 탐색 → 핸드오프 반환</span>
+<span class="ai-out">→ 오케스트레이터: .claude/state/handoff.md 저장</span>
+<span class="ai-out">"구현을 시작할까요?" &gt; 네</span>
 
-<span class="prompt">&gt;</span> <span class="user-input">마무리</span>
+<span class="ai-out">[implementer-sonnet] handoff.md 기준 수정 · scoped lint pass</span>
 
-<span class="ai-out">[reviewer-opus-4_6] guardrails 준수 · 변경 2 파일 OK</span>
+<span class="ai-out">"바로 리뷰와 커밋을 진행할까요?" &gt; 네</span>
+<span class="ai-out">[Preflight] 브랜치명 · 금지경로 · tsc · lint OK</span>
+<span class="ai-out">[reviewer-opus-4_6] git diff → verdict: ready</span>
 <span class="gate">── 확인 게이트 #2 ──</span>
-
 <span class="prompt">&gt;</span> <span class="user-input">네</span>
 
-<span class="ai-out">✓ commit "[HQN][CTA]✨feat: 3D 렌더링 프리셋 [#68900]"</span>
-<span class="ai-out">✓ push · Draft PR 생성 · WI #68900 연결 완료</span>
+<span class="ai-out">→ hqn_finish_approval → git commit / push</span>
+<span class="ai-out">✓ Draft PR · WI #68900 연결</span>
 </pre>
         </div>
       </article>
@@ -334,10 +335,12 @@
           <div class="pro-card"><b>DX 극대화</b><p>한 마디로 ADO 조회 → 브랜치 → 구현 시작까지 논스톱</p></div>
           <div class="pro-card"><b>비용 최적화</b><p>Opus는 계획·리뷰에만, 반복 구현은 Sonnet — 5x 절감</p></div>
           <div class="pro-card"><b>코드베이스 이해</b><p>Serena 심볼 단위 탐색으로 컨텍스트 창 절약</p></div>
+          <div class="pro-card"><b>토큰 릴레이</b><p><code>.claude/state/</code> 파일로 핸드오프·findings 전달 — 메인 컨텍스트 중복 적재 억제</p></div>
           <div class="pro-card"><b>팀 일관성</b><p>CLAUDE.md 레포 체크인 — 개인 설정 무관 동일 워크플로우</p></div>
           <div class="pro-card"><b>안전 게이트</b><p>guardrails로 위험 작업 전 사용자 확인 강제</p></div>
           <div class="pro-card"><b>세션 간 맥락</b><p>자동 메모리로 프로젝트 맥락/피드백 유지</p></div>
-          <div class="pro-card"><b>병렬 에이전트</b><p>독립 컨텍스트 동시 실행으로 대기시간 최소화</p></div>
+          <div class="pro-card"><b>Preflight</b><p>리뷰어(Opus) 스폰 전 저비용 검사로 실패 시 조기 차단</p></div>
+          <div class="pro-card"><b>Light pickup</b><p>단순 태스크(i18n·CSS 등)는 planner·reviewer Opus 구간을 생략해 비용·대기 완화</p></div>
         </div>
       </article>
 
@@ -349,12 +352,12 @@
           <p class="slide-sub">전제해야 할 트레이드오프</p>
         </header>
         <div class="con-grid">
-          <div class="con-card"><b>MCP 의존성</b><p>Serena/ADO MCP 장애 시 워크플로우 전체 중단 위험</p></div>
+          <div class="con-card"><b>MCP 의존성</b><p>Serena/ADO MCP 장애·네트워크 이슈 시 흐름 중단 가능 (ADO 변경은 <code>hqn_guard_mcp_ado</code>로 승인 토큰 검증)</p></div>
           <div class="con-card"><b>Opus 비용 불예측</b><p>컨텍스트가 길어지면 예상보다 많은 토큰 소비 가능</p></div>
           <div class="con-card"><b>핸드오프 정보 손실</b><p>planner→implementer 계획 전달 과정에서 뉘앙스 유실</p></div>
           <div class="con-card"><b>Serena 인덱싱 한계</b><p>복잡 제네릭/동적 import/VTK.js 특수 패턴 부정확 가능</p></div>
           <div class="con-card"><b>자연어 라우팅 모호성</b><p>새 팀원의 낯선 표현에 플로우 오진입 가능</p></div>
-          <div class="con-card"><b>확인 게이트 속도 저하</b><p>반복 작업 시 흐름이 끊김 — "빠르게"도 게이트 강제</p></div>
+          <div class="con-card"><b>확인 게이트</b><p>표준 플로우에서는 안전 확인이 흐름을 끊을 수 있음 — 단순 작업은 Light pickup으로 일부 완화</p></div>
           <div class="con-card"><b>설정 파일 분산</b><p>CLAUDE.md/skills/agents/settings — 유지보수 부담</p></div>
           <div class="con-card"><b>원자성 부재</b><p>브랜치 생성/ADO 상태 변경 간 부분 실패 시 수동 정리</p></div>
         </div>
@@ -372,7 +375,7 @@
           <button class="view-raw-btn" data-raw="workflow">
             <span class="raw-icon">📄</span>
             <span>원본 마크다운 보기</span>
-            <span class="raw-file">CLAUDE_CODE_WORKFLOW.md</span>
+            <span class="raw-file">docs/CLAUDE_CODE_WORKFLOW.md</span>
           </button>
         </div>
       </article>
@@ -436,24 +439,24 @@ CLAUDE.md / skill = "언제 누구를 호출할지" 적힌 규칙
         <header class="slide-head">
           <span class="slide-kicker">SECTION 2</span>
           <h2>이 프로젝트의 실제 실행 흐름</h2>
-          <p class="slide-sub">planner와 reviewer만 서브에이전트로 스폰되고 구현은 메인 세션이 맡는다</p>
+          <p class="slide-sub">planner · implementer · reviewer 세 서브에이전트가 순차 스폰되고, 상태는 <code>.claude/state/</code>로 릴레이</p>
         </header>
         <div class="code-block">
 <pre>사용자: "일해라"
     ↓
 [메인 Claude (Sonnet)]  ← 오케스트레이터
-    ├─ planner-opus-4_6   → 서브에이전트로 스폰
-    └─ 메인 세션 직접 구현 → implementer-sonnet 자동 스폰 없음
+    ├─ planner-opus-4_6      → 핸드오프 텍스트 반환
+    │      └─ 메인이 handoff.md 저장
+    ├─ implementer-sonnet    → handoff.md 읽고 구현
+    └─ (finish) Preflight → reviewer-opus-4_6
+           → git diff · verdict / findings
+           → not ready 시 review_findings.md 저장 후 implementer 재스폰(1회)
 
-사용자: "마무리"
-    ↓
-[메인 Claude (Sonnet)]
-    ├─ reviewer-opus-4_6 → 서브에이전트로 스폰
-    └─ 커밋 / 푸시 / PR   → 메인 세션 직접 실행</pre>
+사용자 최종 승인 후
+    └─ 메인: finish_approval → commit / push / MCP PR</pre>
         </div>
         <p class="insight">
-          기본 pickup/finish 흐름에서는 <b>planner와 reviewer만 실제 스폰</b>되고,
-          구현은 <b>메인 Claude(Sonnet)</b>가 직접 담당한다.
+          <b>세 에이전트 모두 Agent 도구로 스폰</b>된다. 메인은 라우팅·확인 게이트·상태 파일 쓰기와 커밋/푸시를 담당한다.
         </p>
       </article>
 
@@ -590,8 +593,7 @@ skills:
           </li>
         </ol>
         <p class="insight">
-          실제 적용은 frontmatter가 담당하지만, <b>실행 주체</b>는 별개다.
-          <b>implementer-sonnet 정의가 있어도 기본 플로우에서는 메인 세션이 직접 구현</b>한다.
+          서브에이전트의 모델은 frontmatter가 고정한다. 메인 오케스트레이터 기본값(<code>remote-settings.json</code>의 sonnet 등)과 <b>독립</b>이다.
         </p>
       </article>
 
@@ -636,64 +638,48 @@ skills:
         </p>
       </article>
 
-      <!-- Slide 8: 구현 주체 트레이드오프 -->
+      <!-- Slide 8: 파일 릴레이 vs 컨텍스트 격리 -->
       <article class="slide">
         <header class="slide-head">
           <span class="slide-kicker">SECTION 7</span>
-          <h2>메인 직접 구현 vs implementer 자동 스폰</h2>
-          <p class="slide-sub">기술적으로 둘 다 가능하지만 컨텍스트와 개입 방식이 달라진다</p>
+          <h2>파일 릴레이로 얻는 것 · 감수하는 것</h2>
+          <p class="slide-sub">planner/reviewer는 Write 금지 → 오케스트레이터가 state에 기록</p>
         </header>
         <div class="tools-table">
           <table>
             <thead>
               <tr>
-                <th>항목</th>
-                <th>현재 (메인이 직접 구현)</th>
-                <th>implementer 자동 스폰</th>
+                <th>측면</th>
+                <th>이득</th>
+                <th>트레이드오프</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>컨텍스트</td>
-                <td>메인이 대화 전체 기억</td>
-                <td>서브에이전트는 핸드오프만 봄</td>
+                <td>토큰</td>
+                <td>긴 핸드오프 전문을 메인 히스토리에 반복 적재하지 않음</td>
+                <td>파일 내용이 stale하면 재생성·동기화 필요</td>
               </tr>
               <tr>
-                <td>집중도</td>
-                <td>대화 맥락까지 함께 보며 구현</td>
-                <td>핸드오프 중심으로 잡음 없이 구현</td>
+                <td>격리</td>
+                <td>implementer는 <code>handoff.md</code> 중심으로 잡음 적은 구현</td>
+                <td>서브는 대화 맥락 없이 완주 → 핸드오프 품질이 성패</td>
               </tr>
               <tr>
-                <td>사용자 개입</td>
-                <td>구현 중 메인에게 질문 가능</td>
-                <td>서브에이전트 종료 후에야 소통</td>
+                <td>리뷰</td>
+                <td><code>git diff</code> 중심으로 Opus Read 비용 절감</td>
+                <td>diff만으로는 맥락 부족할 수 있음</td>
               </tr>
               <tr>
-                <td>중단 처리</td>
-                <td>즉시 가능</td>
-                <td>서브에이전트 실행 중엔 어려움</td>
-              </tr>
-              <tr>
-                <td>비용</td>
-                <td>추가 컨텍스트 초기화 없음</td>
-                <td>서브에이전트 컨텍스트 초기화 비용 추가</td>
-              </tr>
-              <tr>
-                <td>장점</td>
-                <td>즉시 질문, 방향 수정, 예외 대응이 유연함</td>
-                <td>도구 제한이 명확하고 결과가 독립 리포트로 정리됨</td>
-              </tr>
-              <tr>
-                <td>리스크</td>
-                <td>컨텍스트가 길어지면 핸드오프가 희석될 수 있음</td>
-                <td>대화 맥락 손실 시 잘못된 방향으로 완주할 수 있음</td>
+                <td>재시도</td>
+                <td>not ready 시 findings 파일로 수정 루프 명시</td>
+                <td>재리뷰 1회 제한 등 정책을 스킬/CLAUDE에 맞춰야 함</td>
               </tr>
             </tbody>
           </table>
         </div>
         <p class="insight">
-          구현이 단순하고 핸드오프만으로 완결되면 자동 스폰이 깔끔하고,
-          예외 상황이나 사용자 소통이 잦으면 <b>메인이 직접 구현</b>하는 편이 더 유연하다.
+          <b>Preflight</b>(브랜치·금지경로·tsc·lint)로 Opus 리뷰어 스폰 자체를 아끼는 구간이 있다.
         </p>
       </article>
 
@@ -742,6 +728,7 @@ skills:
         <p class="insight">
           파일 읽기와 코드 작성이 반복되는 <b>고볼륨 구간이 Sonnet</b>으로 가고,
           <b>판단만 하는 저볼륨 구간이 Opus</b>로 간다.
+          단순 태스크는 <b>Light pickup</b>으로 planner·reviewer Opus 호출을 줄일 수 있다.
         </p>
       </article>
 
@@ -821,6 +808,7 @@ skills:
           💡 표준 경로는 함수 하나를 찾기 위해 <b>파일 전체</b>를 컨텍스트에 올린다.
           Serena는 심볼 트리에서 위치를 파악한 뒤 그 함수 본문만 읽어
           파일 크기와 무관하게 토큰이 낮다. planner가 Opus로 실행되는 구조에서는 이 차이가 <b>비용에 직접 기여</b>한다.
+          <b>2026-04-30</b>: planner 에이전트에 심볼 검색 시 Grep 금지 하드 규칙을 두어 Serena 우회 남용을 줄였다.
         </p>
       </article>
 
@@ -839,13 +827,14 @@ skills:
               <li>Serena가 정상 심볼 탐색을 해주는 환경</li>
               <li>planner가 1회 실행으로 깔끔한 핸드오프 생성</li>
               <li>구현 중 파일 수정이 반복되는 작업</li>
+              <li>단순 변경은 <b>Light pickup</b>으로 Opus 구간 축소</li>
             </ul>
           </div>
           <div class="verdict-col lose">
             <h4>⚠️ 손해인 경우</h4>
             <ul>
-              <li>짧은 단순 태스크 (버그픽스, 텍스트 수정)</li>
-              <li>planner가 불필요하게 넓게 탐색하는 경우</li>
+              <li>짧은 단순 태스크인데도 표준 풀 플로우만 탄 경우</li>
+              <li>Serena·인덱스 이슈로 수동 Read/Grep 우회가 잦은 경우</li>
               <li>핸드오프 실패로 planner 재시도 반복</li>
               <li>단일 Sonnet 하나로 끝날 작업에 full 플로우</li>
             </ul>
@@ -894,7 +883,7 @@ skills:
           <button class="view-raw-btn" data-raw="model">
             <span class="raw-icon">📄</span>
             <span>원본 마크다운 보기</span>
-            <span class="raw-file">CLAUDE_CODE_MODEL_SPLIT.md</span>
+            <span class="raw-file">docs/CLAUDE_CODE_MODEL_SPLIT.md</span>
           </button>
         </div>
       </article>
@@ -909,33 +898,33 @@ skills:
         <div class="cover-inner">
           <div class="cover-badge">TAB 03 · 하네스 엔지니어링</div>
           <h1 class="cover-title">
-            <span class="accent">5개 레이어</span>로 짜는<br/>
+            <span class="accent">6개 레이어</span>로 짜는<br/>
             AI 에이전트 안전망
           </h1>
           <p class="cover-desc">
-            Claude의 "의지"와 무관하게 물리적으로 막는 레이어와<br/>
-            지키도록 유도하는 레이어를 함께 쓰는 설계
+            PreToolUse 경로·셸·MCP ADO 게이트와 승인 토큰으로 우회를 막고,<br/>
+            PostToolUse 주입과 Skill로 품질을 유도한다
           </p>
           <div class="cover-meta">
-            <div><span>하드</span> Hooks (PreToolUse / PostToolUse)</div>
-            <div><span>토큰</span> start/finish approval</div>
+            <div><span>하드</span> 경로 · 셸 · MCP ADO · 토큰</div>
+            <div><span>정보</span> PostToolUse (세션당 1회)</div>
             <div><span>소프트</span> Skill · CLAUDE.md</div>
           </div>
         </div>
       </article>
 
-      <!-- Slide 2: 5 레이어 요약 -->
+      <!-- Slide 2: 6 레이어 요약 -->
       <article class="slide">
         <header class="slide-head">
           <span class="slide-kicker">SECTION 1</span>
-          <h2>5개 레이어 한눈에</h2>
-          <p class="slide-sub">중요도에 따라 어느 레이어에 규칙을 두는지 명확히 분리</p>
+          <h2>6개 레이어 한눈에</h2>
+          <p class="slide-sub">Bash가 아닌 MCP 경로까지 토큰 검증으로 맞춘다</p>
         </header>
         <div class="layer-stack">
           <div class="layer hard">
             <div class="layer-num">L1</div>
             <div class="layer-body">
-              <h4>PreToolUse 훅 — 경로 보호</h4>
+              <h4>PreToolUse — 경로 보호</h4>
               <p>src/pages · src/shared 수정 차단</p>
             </div>
             <div class="layer-tag hard-tag">HARD · 우회 불가</div>
@@ -943,21 +932,29 @@ skills:
           <div class="layer hard">
             <div class="layer-num">L2</div>
             <div class="layer-body">
-              <h4>PreToolUse 훅 — 셸 명령 게이트</h4>
-              <p>파괴적 git · 브랜치 생성 · 커밋/푸시 검증</p>
+              <h4>PreToolUse — 셸 명령 게이트</h4>
+              <p>파괴적 git · 브랜치 생성 · az boards 검증</p>
             </div>
             <div class="layer-tag hard-tag">HARD · 우회 불가</div>
           </div>
-          <div class="layer mid">
+          <div class="layer hard">
             <div class="layer-num">L3</div>
             <div class="layer-body">
-              <h4>PostToolUse 훅 — 컨텍스트 주입</h4>
-              <p>편집 후 검증 리마인더 자동 주입</p>
+              <h4>PreToolUse — MCP ADO 게이트</h4>
+              <p><code>hqn_guard_mcp_ado.py</code> — WI 업데이트·브랜치·PR에 start/finish 토큰</p>
+            </div>
+            <div class="layer-tag hard-tag">HARD · CLI와 대칭</div>
+          </div>
+          <div class="layer mid">
+            <div class="layer-num">L4</div>
+            <div class="layer-body">
+              <h4>PostToolUse — 컨텍스트 주입</h4>
+              <p><code>.edit_context_injected</code> 플래그로 세션당 1회만 주입</p>
             </div>
             <div class="layer-tag mid-tag">INFO · 정보 주입</div>
           </div>
           <div class="layer mid">
-            <div class="layer-num">L4</div>
+            <div class="layer-num">L5</div>
             <div class="layer-body">
               <h4>승인 토큰 시스템</h4>
               <p>사용자 "네"를 JSON 파일로 증명 · TTL 관리</p>
@@ -965,7 +962,7 @@ skills:
             <div class="layer-tag hard-tag">HARD · 훅이 검증</div>
           </div>
           <div class="layer soft">
-            <div class="layer-num">L5</div>
+            <div class="layer-num">L6</div>
             <div class="layer-body">
               <h4>Skill · CLAUDE.md</h4>
               <p>커밋 메시지 형식 · Serena 우선 · 응답 언어</p>
@@ -991,18 +988,19 @@ skills:
 │   └── reviewer-opus-4_6.md     <span class="cm">← Opus 리뷰어</span>
 ├── skills/
 │   ├── hqn-frontend-guardrails/ <span class="cm">← 소프트 제약 문서</span>
-│   ├── hqn-ado-pickup-task/
-│   ├── hqn-ado-finish-task/
-│   └── ...
+│   ├── hqn-ado-pickup-task/ · hqn-ado-finish-task/
+│   ├── pickup/ · finish/ · tasks/ <span class="cm">← 자연어 단축 라우팅</span>
 ├── hooks/scripts/
-│   ├── hqn_protect_paths<span class="ext-tip" data-tt-key="ext-py">.py</span>     <span class="cm">← L1: 경로 차단</span>
-│   ├── hqn_guard_shell<span class="ext-tip" data-tt-key="ext-py">.py</span>       <span class="cm">← L2: 셸 게이트</span>
-│   ├── hqn_after_edit_context<span class="ext-tip" data-tt-key="ext-py">.py</span><span class="cm">← L3: 컨텍스트 주입</span>
-│   ├── hqn_start_approval<span class="ext-tip" data-tt-key="ext-py">.py</span>    <span class="cm">← L4: 시작 토큰</span>
-│   └── hqn_finish_approval<span class="ext-tip" data-tt-key="ext-py">.py</span>   <span class="cm">← L4: 완료 토큰</span>
+│   ├── hqn_protect_paths<span class="ext-tip" data-tt-key="ext-py">.py</span>      <span class="cm">← L1</span>
+│   ├── hqn_guard_shell<span class="ext-tip" data-tt-key="ext-py">.py</span>        <span class="cm">← L2</span>
+│   ├── hqn_guard_mcp_ado<span class="ext-tip" data-tt-key="ext-py">.py</span>      <span class="cm">← L3 MCP ADO</span>
+│   ├── hqn_after_edit_context<span class="ext-tip" data-tt-key="ext-py">.py</span>  <span class="cm">← L4 PostToolUse</span>
+│   ├── hqn_start_approval<span class="ext-tip" data-tt-key="ext-py">.py</span> · hqn_finish_approval<span class="ext-tip" data-tt-key="ext-py">.py</span>
+│   └── hqn_session_log<span class="ext-tip" data-tt-key="ext-py">.py</span>         <span class="cm">← 세션 분석 CLI</span>
 └── state/
-    ├── hqn_start_approval<span class="ext-tip" data-tt-key="ext-json">.json</span>  <span class="cm">TTL 1h</span>
-    └── hqn_finish_approval<span class="ext-tip" data-tt-key="ext-json">.json</span> <span class="cm">TTL 2h</span></pre>
+    ├── hqn_start_approval<span class="ext-tip" data-tt-key="ext-json">.json</span> · hqn_finish_approval<span class="ext-tip" data-tt-key="ext-json">.json</span>
+    ├── handoff.md · review_findings.md · complexity_verdict.txt
+    └── .edit_context_injected</pre>
         </div>
       </article>
 
@@ -1065,7 +1063,7 @@ skills:
             <h4>브랜치 생성 유효성</h4>
             <ul class="check-list">
               <li>브랜치명 <code>product/hqn/{type}/{num}</code> 패턴</li>
-              <li>compound command(&amp;&amp;/;) 아님</li>
+              <li>compound 아님 (<code>&amp;&amp;</code> / <code>;</code> / <code>||</code> / 개행 연결)</li>
               <li>현재 브랜치 = product/hqn/main</li>
               <li>워킹트리 clean</li>
               <li>HEAD == origin/main</li>
@@ -1091,12 +1089,12 @@ skills:
         </div>
       </article>
 
-      <!-- Slide 6: L3 컨텍스트 주입 -->
+      <!-- Slide 6: L4 컨텍스트 주입 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">LAYER 3</span>
+          <span class="slide-kicker">LAYER 4</span>
           <h2>PostToolUse — 컨텍스트 주입</h2>
-          <p class="slide-sub">deny가 아닌 정보 주입 — Claude가 "완료"를 성급히 선언하지 않도록</p>
+          <p class="slide-sub"><code>.edit_context_injected</code> 가 있으면 같은 세션에서 재주입 안 함</p>
         </header>
         <div class="inject-demo">
           <div class="inject-step">
@@ -1118,15 +1116,14 @@ skills:
           </div>
         </div>
         <p class="insight">
-          💡 막는 훅이 아니라 <b>Claude의 컨텍스트에 검증 리마인더를 주입</b>해서
-          작업 품질을 유도한다.
+          💡 막는 훅이 아니라 <b>검증 리마인더를 주입</b>한다. 플래그는 pickup 시작 시 삭제되어 새 작업마다 다시 1회 주입된다.
         </p>
       </article>
 
-      <!-- Slide 7: L4 토큰 시스템 -->
+      <!-- Slide 7: L5 토큰 시스템 -->
       <article class="slide">
         <header class="slide-head">
-          <span class="slide-kicker">LAYER 4</span>
+          <span class="slide-kicker">LAYER 5</span>
           <h2>승인 토큰 시스템</h2>
           <p class="slide-sub">사용자 "네"를 JSON 파일로 증명 — Claude 추론 오류에 독립적</p>
         </header>
@@ -1181,7 +1178,8 @@ skills:
             <ul>
               <li>src/pages · src/shared 수정 금지</li>
               <li>git reset --hard · force push 금지</li>
-              <li>브랜치 베이스 검증</li>
+              <li>브랜치 베이스 검증 (셸 + MCP ADO 동일 토큰 규칙)</li>
+              <li>MCP: wit_update · repo_create_branch · repo_create_pull_request</li>
               <li>사용자 승인 없이 브랜치 생성 금지</li>
               <li>커밋 전 사용자 확인</li>
               <li>Draft PR만 허용</li>
@@ -1194,7 +1192,7 @@ skills:
             <ul>
               <li>커밋 메시지 형식 <code>[HQN][FE]✨feat:</code></li>
               <li>이모지-타입 매핑 테이블</li>
-              <li>Serena 우선 사용 지침</li>
+              <li>Serena 우선(guardrails) + planner에 심볼 검색 시 Grep 금지(하드)</li>
               <li>ADO 조직/프로젝트 고정값</li>
               <li>응답 언어 한국어</li>
               <li>허용 브랜치 패턴 설명</li>
@@ -1217,7 +1215,7 @@ skills:
         ▼  Bash 훅 실행 (hqn_guard_shell.py)
 ┌───────────────────────────────────────────────┐
 │ ① 브랜치명 패턴 일치                    <span class="ok">✓</span>  │
-│ ② compound command 아님 (&amp;&amp;/;/||)    <span class="ok">✓</span>  │
+│ ② compound 아님 (&amp;&amp;/;/||/개행)        <span class="ok">✓</span>  │
 │ ③ 현재 브랜치 = product/hqn/main        <span class="ok">✓</span>  │
 │ ④ 워킹트리 clean                         <span class="ok">✓</span>  │
 │ ⑤ HEAD == origin/product/hqn/main       <span class="ok">✓</span>  │
@@ -1258,13 +1256,15 @@ skills:
         </header>
         <div class="con-grid">
           <div class="con-card"><b>경로 하드코딩</b><p>스크립트에 절대경로 박힘 — 다른 환경/클론 경로에서 조용히 무력화</p></div>
-          <div class="con-card"><b>훅 실패가 조용</b><p>예외 시 return 0(허용) — 깨진 훅을 모를 수 있음</p></div>
           <div class="con-card"><b>Python 프로세스 오버헤드</b><p>Edit/Write/Bash 매 호출마다 fork — 누적 지연</p></div>
-          <div class="con-card"><b>TTL 고정값</b><p>복잡 태스크는 만료, 짧은 작업엔 과함 · 만료 메시지 불친절</p></div>
+          <div class="con-card"><b>TTL 고정값</b><p>복잡 태스크는 만료, 짧은 작업엔 과함 · 만료 메시지는 일부만 <code>[GUARD:*]</code>로 구분</p></div>
           <div class="con-card"><b>settings.local.json 종속</b><p>새 팀원이 설정 존재를 모르면 하네스 없이 작업</p></div>
-          <div class="con-card"><b>MCP 경로의 공백</b><p>Bash 외 MCP로 ADO 상태 변경 시 토큰 검증 우회 가능</p></div>
-          <div class="con-card"><b>compound 감지 불완전</b><p>&amp;&amp;/;/|| 문자열 내부도 매칭 가능 · 개행 연결은 감지 못함</p></div>
+          <div class="con-card"><b>compound 감지 — 남은 엣지</b><p><code>&amp;&amp;</code>·개행 연결은 차단. grep 패턴 리터럴 안의 <code>&amp;&amp;</code> 등은 셸 체이닝과 구분 못함(드묾)</p></div>
         </div>
+        <p class="insight" style="margin-top:14px;">
+          <b>2026-04-30 반영</b>: guard 훅 3종은 예외 시 <code>deny</code>(fail-safe), 컨텍스트 주입 훅만 fail-open.
+          MCP ADO 경로는 <code>hqn_guard_mcp_ado.py</code>로 CLI와 동일한 토큰 검증이 적용됨.
+        </p>
       </article>
 
       <!-- Slide 12: 마무리 -->
@@ -1273,14 +1273,14 @@ skills:
           <div class="end-kicker">TAB 03 · Harness Engineering</div>
           <h2>규칙은 명령이 아니라<br/>코드로 강제된다</h2>
           <p class="end-desc">
-            훅 · 토큰 · 스킬 세 계층이 역할을 나눠 맞물리고,<br/>
+            경로·셸·MCP·PostToolUse·토큰·스킬 여섯 계층이 역할을 나눠 맞물리고,<br/>
             Claude의 "의지"가 아니라 <b>상태와 검증</b>으로 안전성이 증명된다.<br/>
             다만 훅은 보조망이지 <b>설계 품질을 대체하지 않는다</b>.
           </p>
           <button class="view-raw-btn" data-raw="harness">
             <span class="raw-icon">📄</span>
             <span>원본 마크다운 보기</span>
-            <span class="raw-file">CLAUDE_CODE_HARNESS_ENGINEERING.md</span>
+            <span class="raw-file">docs/CLAUDE_CODE_HARNESS_ENGINEERING.md</span>
           </button>
         </div>
       </article>
@@ -1320,7 +1320,7 @@ skills:
       <header class="overlay-head">
         <div>
           <div class="overlay-kicker">원본 마크다운</div>
-          <h3 id="overlayTitle">CLAUDE_CODE_WORKFLOW.md</h3>
+          <h3 id="overlayTitle">docs/CLAUDE_CODE_WORKFLOW.md</h3>
         </div>
         <button class="overlay-close" data-close aria-label="닫기">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>

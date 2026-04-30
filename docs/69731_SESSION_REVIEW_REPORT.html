@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HQN #69731 세션 리뷰 리포트</title>
+<style>
+  :root {
+    --planner:    #6366f1;
+    --impl:       #10b981;
+    --reviewer:   #f59e0b;
+    --waste:      #ef4444;
+    --ok:         #10b981;
+    --bg:         #0f172a;
+    --surface:    #1e293b;
+    --surface2:   #273344;
+    --border:     #334155;
+    --text:       #e2e8f0;
+    --muted:      #94a3b8;
+    --code-bg:    #0d1929;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+
+  .container { max-width: 960px; margin: 0 auto; }
+
+  /* Header */
+  .report-header {
+    border-left: 4px solid var(--planner);
+    padding: 1.5rem 1.5rem;
+    background: var(--surface);
+    border-radius: 0 12px 12px 0;
+    margin-bottom: 2rem;
+  }
+  .report-header h1 { font-size: 1.5rem; color: #fff; margin-bottom: 0.5rem; }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+  .meta-item { display: flex; flex-direction: column; gap: 2px; }
+  .meta-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .meta-value { font-size: 0.85rem; color: var(--text); font-family: monospace; }
+
+  /* Section */
+  .section { margin-bottom: 2.5rem; }
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .section-num {
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* Summary cards */
+  .agent-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  @media (max-width: 600px) { .agent-cards { grid-template-columns: 1fr; } }
+  .agent-card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1.2rem;
+    border-top: 3px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .agent-card.planner { border-top-color: var(--planner); }
+  .agent-card.impl    { border-top-color: var(--impl); }
+  .agent-card.reviewer{ border-top-color: var(--reviewer); }
+
+  .agent-name { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem; }
+  .agent-model { font-size: 0.72rem; color: var(--muted); font-family: monospace; margin-bottom: 0.8rem; }
+  .stat-row { display: flex; justify-content: space-between; margin-bottom: 0.3rem; }
+  .stat-label { font-size: 0.75rem; color: var(--muted); }
+  .stat-value { font-size: 0.8rem; font-family: monospace; }
+  .pct-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 0.8rem;
+    overflow: hidden;
+  }
+  .pct-fill { height: 100%; border-radius: 2px; }
+  .planner  .pct-fill { background: var(--planner); width: 76%; }
+  .impl     .pct-fill { background: var(--impl);    width: 12%; }
+  .reviewer .pct-fill { background: var(--reviewer);width: 12%; }
+  .pct-label { font-size: 0.7rem; color: var(--muted); margin-top: 0.3rem; text-align: right; }
+
+  /* Token table */
+  .token-table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--muted);
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    font-weight: 500;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  td {
+    padding: 0.55rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .total-row td { font-weight: 600; color: #fff; background: var(--surface2); }
+  code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 0.8em;
+  }
+
+  /* Phase timeline */
+  .phase-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .phase-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    border-left: 3px solid var(--border);
+  }
+  .phase-item.waste { border-left-color: var(--waste); }
+  .phase-item.ok    { border-left-color: var(--ok); }
+  .phase-range {
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    min-width: 60px;
+    white-space: nowrap;
+    padding-top: 2px;
+  }
+  .phase-info { flex: 1; }
+  .phase-title { font-size: 0.88rem; font-weight: 500; margin-bottom: 0.2rem; }
+  .phase-meta { font-size: 0.75rem; color: var(--muted); }
+  .phase-turns {
+    font-size: 0.72rem;
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    align-self: center;
+  }
+
+  /* Accordion */
+  details {
+    background: var(--surface);
+    border-radius: 8px;
+    margin-bottom: 0.6rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  summary {
+    padding: 0.8rem 1rem;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 500;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before {
+    content: '▶';
+    font-size: 0.6rem;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  .details-body { padding: 0 1rem 1rem; }
+  .details-body table { font-size: 0.8rem; }
+
+  /* Waste / OK badge */
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .badge.waste { background: rgba(239,68,68,0.15); color: #fca5a5; }
+  .badge.ok    { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+  .badge.info  { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+
+  /* Waste cards */
+  .waste-cards { display: flex; flex-direction: column; gap: 1rem; }
+  .waste-card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1.2rem;
+    border-left: 4px solid var(--waste);
+  }
+  .waste-card-title {
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .waste-turns {
+    background: rgba(239,68,68,0.15);
+    color: #fca5a5;
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .waste-body { font-size: 0.83rem; color: var(--muted); }
+  .waste-body p { margin-bottom: 0.4rem; }
+  .waste-body strong { color: var(--text); }
+
+  /* Grep table tags */
+  .tag-ok    { color: #6ee7b7; font-size: 0.72rem; }
+  .tag-alt   { color: #a5b4fc; font-size: 0.72rem; }
+  .tag-waste { color: #fca5a5; font-size: 0.72rem; }
+
+  /* Score */
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+  }
+  .score-card {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 1.2rem;
+    text-align: center;
+  }
+  .score-label { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.5rem; }
+  .score-value { font-size: 2rem; font-weight: 700; }
+  .score-note  { font-size: 0.72rem; color: var(--muted); margin-top: 0.4rem; }
+  .score-card.good  .score-value { color: var(--ok); }
+  .score-card.mid   .score-value { color: var(--waste); }
+  .score-card.total .score-value { color: var(--planner); }
+
+  /* Suggest box */
+  .suggest-box {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    color: #93c5fd;
+    margin-top: 0.6rem;
+  }
+
+  .footnote {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
+
+  h3 { font-size: 0.95rem; color: var(--text); margin: 1.2rem 0 0.6rem; }
+  p  { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.6rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="report-header">
+    <h1>HQN #69731 세션 리뷰 리포트</h1>
+    <div class="meta-grid">
+      <div class="meta-item">
+        <span class="meta-label">작업</span>
+        <span class="meta-value">MIP 에디트뷰어 툴바 전체 제거 버튼 추가</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">브랜치</span>
+        <span class="meta-value">product/hqn/feature/69731</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">세션 ID</span>
+        <span class="meta-value">ee9cd180-2b43-48ba</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">분석일</span>
+        <span class="meta-value">2026-04-29</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1. 전체 요약 -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span> 전체 요약</div>
+
+    <div class="agent-cards">
+      <div class="agent-card planner">
+        <div class="agent-name">planner</div>
+        <div class="agent-model">claude-opus-4_6</div>
+        <div class="stat-row"><span class="stat-label">turns / API</span><span class="stat-value">94 turns · 94회</span></div>
+        <div class="stat-row"><span class="stat-label">input / output</span><span class="stat-value">4.7K / 13.0K</span></div>
+        <div class="stat-row"><span class="stat-label">cache_read</span><span class="stat-value">3.6M</span></div>
+        <div class="pct-bar"><div class="pct-fill"></div></div>
+        <div class="pct-label">API 호출 비중 76%</div>
+      </div>
+      <div class="agent-card impl">
+        <div class="agent-name">implementer</div>
+        <div class="agent-model">claude-sonnet-4_6</div>
+        <div class="stat-row"><span class="stat-label">turns / API</span><span class="stat-value">15 turns · 15회</span></div>
+        <div class="stat-row"><span class="stat-label">input / output</span><span class="stat-value">9.8K / 1.4K</span></div>
+        <div class="stat-row"><span class="stat-label">cache_read</span><span class="stat-value">312.2K</span></div>
+        <div class="pct-bar"><div class="pct-fill"></div></div>
+        <div class="pct-label">API 호출 비중 12%</div>
+      </div>
+      <div class="agent-card reviewer">
+        <div class="agent-name">reviewer</div>
+        <div class="agent-model">claude-opus-4_6</div>
+        <div class="stat-row"><span class="stat-label">turns / API</span><span class="stat-value">15 turns · 15회</span></div>
+        <div class="stat-row"><span class="stat-label">input / output</span><span class="stat-value">1.3K / 1.4K</span></div>
+        <div class="stat-row"><span class="stat-label">cache_read</span><span class="stat-value">215.7K</span></div>
+        <div class="pct-bar"><div class="pct-fill"></div></div>
+        <div class="pct-label">API 호출 비중 12%</div>
+      </div>
+    </div>
+
+    <div class="token-table-wrap">
+      <table>
+        <thead>
+          <tr><th>에이전트</th><th>turns</th><th>input</th><th>output</th><th>cache_read</th><th>cache_create</th><th>API 비중</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>planner-opus-4_6</td><td>94</td><td>4.7K</td><td>13.0K</td><td>3.6M</td><td>124.0K</td><td><span class="badge waste">76%</span></td></tr>
+          <tr><td>implementer-sonnet</td><td>15</td><td>9.8K</td><td>1.4K</td><td>312.2K</td><td>128.2K</td><td><span class="badge ok">12%</span></td></tr>
+          <tr><td>reviewer-opus-4_6</td><td>15</td><td>1.3K</td><td>1.4K</td><td>215.7K</td><td>84.3K</td><td><span class="badge ok">12%</span></td></tr>
+          <tr class="total-row"><td>합계</td><td>124</td><td>15.8K</td><td>15.9K</td><td>4.1M</td><td>336.6K</td><td>100%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 2. Planner Phase 요약 -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span> Planner Phase별 분류 (94 turns)</div>
+    <div class="phase-list">
+      <div class="phase-item ok">
+        <div class="phase-range">T 1–9</div>
+        <div class="phase-info">
+          <div class="phase-title">Serena 초기화</div>
+          <div class="phase-meta">initial_instructions · ToolSearch · read_memory · Glob × 2</div>
+        </div>
+        <div class="phase-turns">9 turns · ~89K</div>
+      </div>
+      <div class="phase-item waste">
+        <div class="phase-range">T 10–17</div>
+        <div class="phase-info">
+          <div class="phase-title">파일 구조 파악 <span class="badge waste">⚠ get_symbols_overview 4회 중복</span></div>
+          <div class="phase-meta">Glob × 3 · get_symbols_overview × 4 (같은 경로 반복)</div>
+        </div>
+        <div class="phase-turns">8 turns · ~310K</div>
+      </div>
+      <div class="phase-item waste">
+        <div class="phase-range">T 18–39</div>
+        <div class="phase-info">
+          <div class="phase-title">핵심 컴포넌트 분석 <span class="badge waste">⚠ EditToolBar.tsx 5회 읽기</span></div>
+          <div class="phase-meta">find_symbol × 11 · Read × 5 · Grep × 4</div>
+        </div>
+        <div class="phase-turns">22 turns · ~1.0M</div>
+      </div>
+      <div class="phase-item waste">
+        <div class="phase-range">T 40–75</div>
+        <div class="phase-info">
+          <div class="phase-title">아이콘 탐색 <span class="badge waste">⚠ 최대 낭비 구간 · Bash 9회 반복</span></div>
+          <div class="phase-meta">Grep × 8 · Bash × 9 (yarn PnP) · find_symbol × 1 — 전체 cache_read의 70% 소비</div>
+        </div>
+        <div class="phase-turns">36 turns · ~2.6M</div>
+      </div>
+      <div class="phase-item ok">
+        <div class="phase-range">T 76–94</div>
+        <div class="phase-info">
+          <div class="phase-title">i18n 키 결정 + handoff 작성</div>
+          <div class="phase-meta">Grep × 6 · Bash × 1 · Read × 1 · handoff output 4.0K</div>
+        </div>
+        <div class="phase-turns">19 turns · ~3.6M</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Planner Turn 상세 -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span> Planner Turn별 상세</div>
+
+    <details>
+      <summary>Phase 1 · Serena 초기화 (Turn 1~9)</summary>
+      <div class="details-body">
+        <table>
+          <thead><tr><th>Turn</th><th>동작</th><th>cache_read</th><th>cache_create</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Intent: 초기화 계획 수립</td><td>0</td><td>16.3K</td></tr>
+            <tr><td>2</td><td><code>ToolSearch</code>(serena initial_instructions)</td><td>0</td><td>16.3K</td></tr>
+            <tr><td>3</td><td><code>serena.initial_instructions()</code></td><td>16.3K</td><td>1.7K</td></tr>
+            <tr><td>4~5</td><td><code>ToolSearch</code>(serena find_symbol, get_symbols_overview)</td><td>32.6K</td><td>7.4K</td></tr>
+            <tr><td>6~9</td><td><code>serena.read_memory</code> + <code>Glob</code> × 2</td><td>89K</td><td>8.0K</td></tr>
+            <tr class="total-row"><td colspan="2">소계</td><td>~89K</td><td>49.7K</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+
+    <details>
+      <summary>Phase 2 · 파일 구조 파악 (Turn 10~17) <span class="badge waste">⚠ 3 turns 낭비</span></summary>
+      <div class="details-body">
+        <table>
+          <thead><tr><th>Turn</th><th>동작</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td>10~12</td><td><code>Glob</code> × 2 (mip/edit/**/*)</td><td></td></tr>
+            <tr><td>13</td><td>Intent: 주요 파일 발견</td><td></td></tr>
+            <tr><td>14</td><td><code>serena.get_symbols_overview</code>(mip/edit)</td><td><span class="badge waste">⚠ 반복 1</span></td></tr>
+            <tr><td>15</td><td><code>serena.get_symbols_overview</code>(mip/edit)</td><td><span class="badge waste">⚠ 반복 2</span></td></tr>
+            <tr><td>16</td><td><code>serena.get_symbols_overview</code>(mip/edit)</td><td><span class="badge waste">⚠ 반복 3</span></td></tr>
+            <tr><td>17</td><td><code>serena.get_symbols_overview</code>(mip/edit) → 결과 수신</td><td><span class="badge waste">⚠ 반복 4</span></td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:0.8rem;">동일 경로 4회 연속 호출. 응답이 동일한데 누적되는 것처럼 반복. 1회로 충분.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Phase 3 · 핵심 컴포넌트 분석 (Turn 18~39) <span class="badge waste">⚠ 4 turns 낭비</span></summary>
+      <div class="details-body">
+        <table>
+          <thead><tr><th>Turn</th><th>동작</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td>18~19</td><td><code>serena.find_symbol</code>(EditToolBar)</td><td></td></tr>
+            <tr><td>20</td><td>Intent: JSX 잘림, 추가 읽기 필요</td><td></td></tr>
+            <tr><td>21</td><td><code>Read</code>(EditToolBar.tsx L168~228)</td><td><span class="badge waste">⚠ 분할읽기 1</span></td></tr>
+            <tr><td>22</td><td><code>Read</code>(EditToolBar.tsx L226~306)</td><td><span class="badge waste">⚠ 분할읽기 2</span></td></tr>
+            <tr><td>23</td><td><code>Read</code>(EditToolBar.tsx L304~364)</td><td><span class="badge waste">⚠ 분할읽기 3</span></td></tr>
+            <tr><td>24</td><td><code>Read</code>(EditToolBar.tsx L362~382)</td><td><span class="badge waste">⚠ 분할읽기 4</span></td></tr>
+            <tr><td>25~26</td><td><code>Read</code>(EditToolBar.tsx 전체)</td><td><span class="badge waste">⚠ 중복 전체읽기</span></td></tr>
+            <tr><td>27~33</td><td><code>serena.find_symbol</code> × 6 (clearAllAnnotations, setSelectedCoordinates 등)</td><td></td></tr>
+            <tr><td>34~36</td><td><code>find_symbol</code> + <code>Read</code>(useMipVesselEditing.ts L88~103)</td><td></td></tr>
+            <tr><td>37~39</td><td><code>find_symbol</code>(handleReset, handleInitializeClick)</td><td></td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:0.8rem;">4분할 Read 후 전체 파일 재Read. 처음부터 <code>Read(EditToolBar.tsx)</code> 1회로 충분.</p>
+      </div>
+    </details>
+
+    <details open>
+      <summary>Phase 4 · 아이콘 탐색 (Turn 40~75) <span class="badge waste">⚠ 최대 낭비 · ~18 turns</span></summary>
+      <div class="details-body">
+        <table>
+          <thead><tr><th>Turn</th><th>동작</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td>40~41</td><td><code>Grep</code>(EditToolBar in EditViewer.tsx)</td><td></td></tr>
+            <tr><td>42~44</td><td><code>Grep</code>(i18n 키) + <code>Glob</code>(fallback.json)</td><td></td></tr>
+            <tr><td>45~47</td><td><code>Grep</code>("Delete" icon, "Download" icon)</td><td></td></tr>
+            <tr style="background:rgba(16,185,129,0.08)"><td>48~50</td><td><code>Grep</code>(icon="Download") → <strong>Download 확인 ✓</strong></td><td><span class="badge ok">여기서 종료했어야 함</span></td></tr>
+            <tr><td>51~52</td><td><code>Grep</code>('Download' in .) 재검색</td><td><span class="badge waste">⚠ 50에서 확인 완료</span></td></tr>
+            <tr><td>53~55</td><td><code>Grep</code>(clearAllAnnotations, setSelectedCoordinates × 2)</td><td><span class="badge waste">⚠ 54·55 중복</span></td></tr>
+            <tr><td>56~59</td><td><code>Grep</code>(useMipVesselEditing) + <code>find_symbol</code> 재호출</td><td><span class="badge waste">⚠ T30·33에서 이미 탐색</span></td></tr>
+            <tr><td>60~61</td><td><code>Read</code>(useMipVesselEditing.ts L455~485)</td><td></td></tr>
+            <tr><td>62~64</td><td><code>Grep</code>(IconShape × 2)</td><td><span class="badge waste">⚠ 63·64 중복</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>65</td><td><code>Bash</code>(find .yarn -path "*/nsds/*")</td><td><span class="badge waste">⚠ PnP 탐색 시작</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>66</td><td><code>Bash</code>(find . -path "*nsds*" -name "icon*")</td><td><span class="badge waste">⚠ 재시도</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>67</td><td><code>Bash</code>(find . -path "*nsui3*" -name "*.js")</td><td><span class="badge waste">⚠ 재시도</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>68~69</td><td>Intent: Yarn PnP 시도 + <code>Bash</code>(ls .pnp.*)</td><td><span class="badge waste">⚠ 재시도</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>70</td><td><code>Bash</code>(yarn node -e "require('.pnp.cjs')...")</td><td><span class="badge waste">⚠ 실패</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>71</td><td><code>Bash</code>(yarn node -e ...) 재시도</td><td><span class="badge waste">⚠ 재시도</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>72</td><td><code>Bash</code>(yarn node -e ...) 재시도</td><td><span class="badge waste">⚠ 재시도</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>73</td><td><code>Bash</code>(yarn node -e ...) 재시도</td><td><span class="badge waste">⚠ 재시도</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>74</td><td><code>Bash</code>(yarn node -e ...) 재시도</td><td><span class="badge waste">⚠ 재시도</span></td></tr>
+            <tr style="background:rgba(239,68,68,0.07)"><td>75</td><td><code>Bash</code>(yarn node -e ...) → Download 아이콘 확인 성공</td><td><span class="badge waste">⚠ 9번째 시도</span></td></tr>
+          </tbody>
+        </table>
+        <p style="margin-top:0.8rem;"><strong>Turn 50에서 이미 확인 완료.</strong> 이후 11 turns는 완전히 불필요. PnP 내부 타입 탐색 대신 기존 사용 예시의 import 문 1회 Read로 충분.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Phase 5 · i18n 키 결정 + handoff 작성 (Turn 76~94)</summary>
+      <div class="details-body">
+        <table>
+          <thead><tr><th>Turn</th><th>동작</th><th>비고</th></tr></thead>
+          <tbody>
+            <tr><td>76~78</td><td><code>Grep</code>(제거, Remove All, Clear All in locales)</td><td><span class="badge ok">✓ 정당한 Grep (JSON)</span></td></tr>
+            <tr><td>79~81</td><td><code>Read</code>(fallback.json) + <code>Bash</code>(wc -l)</td><td></td></tr>
+            <tr><td>82~86</td><td><code>Grep</code>(TID 키) + <code>Bash</code>(yarn node TID 최대값)</td><td></td></tr>
+            <tr><td>87~89</td><td><code>get_symbols_overview</code> + <code>Read</code>(editToolBar.module.scss)</td><td></td></tr>
+            <tr><td>90~93</td><td><code>Grep</code>(handleInitializeClick, onConfirm)</td><td></td></tr>
+            <tr style="background:rgba(16,185,129,0.08)"><td><strong>94</strong></td><td><strong>최종 handoff 작성 (output 4.0K)</strong></td><td><span class="badge ok">✓ 완료</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
+  <!-- 4. Implementer -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span> Implementer 상세 (15 turns)</div>
+    <table>
+      <thead><tr><th>구간</th><th>동작</th><th>turns</th></tr></thead>
+      <tbody>
+        <tr><td>1~4</td><td>handoff 읽기 + ToolSearch(serena init)</td><td>4</td></tr>
+        <tr><td>5~11</td><td>Read × 5개 파일 (fallback, EditToolBar, EditViewer, useMipVesselEditing, useMipAnnotations)</td><td>7</td></tr>
+        <tr><td>12</td><td>Stop condition 검증 완료</td><td>1</td></tr>
+        <tr style="background:rgba(16,185,129,0.08)"><td><strong>13</strong></td><td><strong>Write(fallback.json)</strong> — T1 키 2개 추가</td><td>1</td></tr>
+        <tr><td>14</td><td>Step 2 의도 선언</td><td>1</td></tr>
+        <tr style="background:rgba(16,185,129,0.08)"><td><strong>15</strong></td><td><strong>Edit(EditToolBar.tsx)</strong> — onClearAll prop + Download 버튼 추가</td><td>1</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:0.8rem;">탐색 → 검증 → 구현 순서가 깔끔. <strong>15턴, Write 1회 + Edit 1회</strong>로 마무리. <span class="badge ok">9/10</span></p>
+  </div>
+
+  <!-- 5. Reviewer -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span> Reviewer 상세 (15 turns)</div>
+    <table>
+      <thead><tr><th>구간</th><th>동작</th><th>turns</th></tr></thead>
+      <tbody>
+        <tr><td>1~4</td><td>git diff / cached / status</td><td>4</td></tr>
+        <tr><td>5~7</td><td>git log + merge-base ancestry 확인</td><td>3</td></tr>
+        <tr><td>8~10</td><td>Grep(setSelectedCoordinates, clearAllAnnotations)</td><td>3</td></tr>
+        <tr><td>11~12</td><td>Grep(return { in useMipVesselEditing) — export 검증</td><td>2</td></tr>
+        <tr><td>13~14</td><td>Grep(onConfirm in EditViewer) — confirm 패턴 확인</td><td>2</td></tr>
+        <tr style="background:rgba(16,185,129,0.08)"><td><strong>15</strong></td><td><strong>최종 verdict: ready</strong></td><td>1</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:0.8rem;">핵심 dependency만 집중 검증. 군더더기 없음. <span class="badge ok">9/10</span></p>
+  </div>
+
+  <!-- 6. Grep 분류 -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span> Grep 사용 분류 (Planner 18회)</div>
+
+    <h3>✅ 정당한 Grep — 8회</h3>
+    <p>Serena가 인덱싱 불가한 파일(JSON) 또는 JSX prop 값 검색</p>
+    <table>
+      <thead><tr><th>분류</th><th>패턴</th><th>대상</th></tr></thead>
+      <tbody>
+        <tr><td><span class="tag-ok">JSON 파일</span></td><td><code>모두.*제거|전체.*삭제...</code></td><td>src/locales</td></tr>
+        <tr><td><span class="tag-ok">JSON 파일</span></td><td><code>TID_02118 / TID_00042 / TID_00002</code></td><td>src/locales</td></tr>
+        <tr><td><span class="tag-ok">JSON 파일</span></td><td><code>제거 / Remove All|Clear All</code></td><td>ko.json / en.json</td></tr>
+        <tr><td><span class="tag-ok">JSX prop 값</span></td><td><code>icon="Delete" / icon="Download"</code></td><td>src/products/hqn</td></tr>
+      </tbody>
+    </table>
+
+    <h3>🔄 Serena로 대체 가능했던 Grep — 8회</h3>
+    <table>
+      <thead><tr><th>Turn</th><th>Grep 패턴</th><th>더 나은 대안</th></tr></thead>
+      <tbody>
+        <tr><td>41</td><td><code>EditToolBar</code> in EditViewer.tsx</td><td><span class="tag-alt">find_referencing_symbols('EditToolBar')</span></td></tr>
+        <tr><td>54</td><td><code>clearAllAnnotations|setSelectedCoordinates</code></td><td><span class="tag-alt">find_referencing_symbols('clearAllAnnotations')</span></td></tr>
+        <tr><td>55</td><td><code>setSelectedCoordinates</code></td><td><span class="tag-waste">⚠ 54와 중복</span></td></tr>
+        <tr><td>57</td><td><code>useMipVesselEditing</code></td><td><span class="tag-alt">find_referencing_symbols('useMipVesselEditing')</span></td></tr>
+        <tr><td>63</td><td><code>IconShape</code></td><td><span class="tag-alt">find_symbol('IconShape')</span></td></tr>
+        <tr><td>64</td><td><code>type IconShape</code></td><td><span class="tag-waste">⚠ 63과 중복</span></td></tr>
+        <tr><td>91</td><td><code>handleInitializeClick</code></td><td><span class="tag-waste">⚠ Turn 39에서 이미 find_symbol로 탐색</span></td></tr>
+        <tr><td>93</td><td><code>import.*onConfirm</code></td><td><span class="tag-alt">find_referencing_symbols('onConfirm')</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>❌ 불필요했던 Grep — 2회</h3>
+    <table>
+      <thead><tr><th>Turn</th><th>문제</th></tr></thead>
+      <tbody>
+        <tr><td>50</td><td>Turn 49에서 <code>icon="Download"</code> 찾은 직후 범위만 넓혀 재검색</td></tr>
+        <tr><td>52</td><td>Turn 50에서 이미 확인 완료 후 불안감으로 전체 재검색</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 7. 낭비 포인트 -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">07</span> 낭비 포인트 요약</div>
+    <div class="waste-cards">
+
+      <div class="waste-card">
+        <div class="waste-card-title">
+          낭비 1 — PnP 아이콘 타입 탐색 (Turn 65~75)
+          <span class="waste-turns">11 turns 낭비</span>
+        </div>
+        <div class="waste-body">
+          <p><strong>문제</strong>: Turn 50에서 <code>icon="Download"</code> 실사용 예시 발견 완료 후에도 타입 정의 검증을 위해 Yarn PnP 내부 파일을 <code>find</code> + <code>yarn node</code>로 9번 반복 시도.</p>
+          <p><strong>원인</strong>: 실사용 예시로 충분한데 라이브러리 타입 파일까지 직접 확인하려는 과도한 검증 욕구.</p>
+          <p><strong>대안</strong>: Turn 50 확인 → 탐색 종료. 타입 불확실 시 해당 파일의 import 문 1회 Read로 충분.</p>
+        </div>
+      </div>
+
+      <div class="waste-card">
+        <div class="waste-card-title">
+          낭비 2 — EditToolBar.tsx 분할 읽기 (Turn 21~26)
+          <span class="waste-turns">4 turns 낭비</span>
+        </div>
+        <div class="waste-body">
+          <p><strong>문제</strong>: <code>find_symbol</code> 결과 잘림 → L168~228 → L226~306 → L304~364 → L362~382 분할 Read → 마지막에 전체 파일 재Read.</p>
+          <p><strong>대안</strong>: 처음부터 <code>Read(EditToolBar.tsx)</code> 전체 1회.</p>
+        </div>
+      </div>
+
+      <div class="waste-card">
+        <div class="waste-card-title">
+          낭비 3 — get_symbols_overview 반복 (Turn 14~17)
+          <span class="waste-turns">3 turns 낭비</span>
+        </div>
+        <div class="waste-body">
+          <p><strong>문제</strong>: 동일 경로 <code>mip/edit</code>에 4회 연속 호출. 응답이 동일한데 누적되는 것처럼 반복.</p>
+          <p><strong>대안</strong>: 1회 호출 후 결과 확인.</p>
+        </div>
+      </div>
+
+      <div class="waste-card">
+        <div class="waste-card-title">
+          낭비 4 — setSelectedCoordinates 재확인 (Turn 59)
+          <span class="waste-turns">1 turn 낭비</span>
+        </div>
+        <div class="waste-body">
+          <p><strong>문제</strong>: Turn 30, 33에서 이미 <code>find_symbol</code>로 찾았는데 Turn 59에서 재호출.</p>
+          <p><strong>대안</strong>: 이전 find_symbol 결과를 컨텍스트에서 재참조.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 8. 개선 제안 -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">08</span> 개선 제안</div>
+
+    <h3>A. Planner 프롬프트에 추가할 규칙</h3>
+    <div class="suggest-box">탐색 우선순위
+  심볼 정의   → serena.find_symbol            (Grep 금지)
+  심볼 참조   → serena.find_referencing_symbols (Grep 금지)
+  JSON / JSX prop / 문자열 패턴 → Grep 허용
+
+파일 읽기
+  find_symbol 결과 잘리면 분할 Read 대신 Read(file) 전체 1회
+  같은 파일 2회 이상 Read 금지
+  이미 찾은 심볼 재검색 금지 — 컨텍스트에서 재참조
+
+아이콘 검증
+  코드베이스 내 실사용 예시(icon="X") 1회 발견 → 탐색 종료
+  라이브러리 내부 PnP 파일 직접 열기 금지</div>
+
+    <h3>B. 다음 handoff에 추가할 힌트</h3>
+    <div class="suggest-box">EditToolBar ToolButton icon prop: icon="Download" 사용 가능
+  → src/products/hqn 내 기존 사용 예시 다수 존재
+
+useMipVesselEditing의 setSelectedCoordinates
+  → return 객체에 포함 (line 473)
+
+IconShape 타입: PnP 내부 탐색 불필요
+  → 기존 사용 예시 참조로 충분</div>
+  </div>
+
+  <!-- 9. 효율성 점수 -->
+  <div class="section">
+    <div class="section-title"><span class="section-num">09</span> 효율성 점수</div>
+    <div class="score-grid">
+      <div class="score-card mid">
+        <div class="score-label">Planner 탐색 효율</div>
+        <div class="score-value">5</div>
+        <div class="score-note">/ 10 · 아이콘 탐색 낭비, 중복 읽기 다수</div>
+      </div>
+      <div class="score-card good">
+        <div class="score-label">Implementer 구현 효율</div>
+        <div class="score-value">9</div>
+        <div class="score-note">/ 10 · 15턴, 깔끔</div>
+      </div>
+      <div class="score-card good">
+        <div class="score-label">Reviewer 검증 품질</div>
+        <div class="score-value">9</div>
+        <div class="score-note">/ 10 · 핵심 dependency 집중 검증</div>
+      </div>
+      <div class="score-card total">
+        <div class="score-label">전체</div>
+        <div class="score-value">7</div>
+        <div class="score-note">/ 10 · Planner 개선 여지 큼</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">Generated by claude-sonnet-4-6 · 2026-04-29</div>
+
+</div>
+</body>
+</html>

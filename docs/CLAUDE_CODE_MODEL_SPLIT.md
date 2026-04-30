@@ -48,21 +48,23 @@ Claude Code를 열어서 "일해라"라고 입력하면 사용자와 직접 대�
     │ CLAUDE.md 읽음 → pickup 흐름 감지
     │
     ├─→ [planner-opus-4_6]  (Opus, 서브에이전트로 스폰)
-    │         ↓ 핸드오프 문서 반환
+    │         ↓ 핸드오프 텍스트 반환
+    │         ↓ [오케스트레이터] .claude/state/handoff.md 에 저장
     │
-    │ [메인 Claude 자체가 구현] ← implementer-sonnet은 스폰 안 됨
-    │   핸드오프를 받은 메인 세션이 직접 코드 작성
+    │ 사용자 확인: "구현을 시작할까요?"
     │
-    → 사용자에게 핸드오프 + 다음 지시 전달
-
-사용자: "마무리" (finish)
-    ↓
-[메인 Claude (Sonnet)]
+    ├─→ [implementer-sonnet]  (Sonnet, 서브에이전트로 스폰)
+    │         ↓ handoff.md 읽고 구현 → 압축 결과 반환
+    │
+    │ 사용자 확인: "바로 리뷰와 커밋을 진행할까요?"
     │
     ├─→ [reviewer-opus-4_6]  (Opus, 서브에이전트로 스폰)
-    │         ↓ 리뷰 결과 반환
+    │         ↓ git diff 기반 리뷰 → verdict + findings 반환
+    │         ↓ not ready 시 → [오케스트레이터] review_findings.md 에 저장
     │
-    │ 커밋 / 푸시 / PR 생성 (메인 세션이 직접 실행)
+    │ (not ready 시) → implementer-sonnet 재스폰 → 재리뷰 (1회)
+    │
+    │ 사용자 최종 승인 → 커밋 / 푸시 / PR 생성
     │
     → 사용자에게 최종 결과 전달
 ```
@@ -75,6 +77,12 @@ CLAUDE.md와 skill 파일은 **오케스트레이터(메인 Claude)가 읽는 �
 CLAUDE.md / skill = "언제 어떤 에이전트를 호출해" 라고 적힌 규칙서
 메인 Claude       = 그 규칙서를 읽고 실제로 Agent 도구를 호출하는 실행 주체
 ```
+
+에이전트 간 데이터 전달은 `.claude/state/` 파일을 통해 이루어진다:
+- `handoff.md`: **planner가 텍스트 반환 → 오케스트레이터가 저장**, implementer가 읽음
+- `review_findings.md`: **reviewer가 텍스트 반환 → 오케스트레이터가 저장** (not ready 시), implementer가 읽음 (수정 시)
+
+planner와 reviewer는 `disallowedTools: Write, Edit`으로 파일을 직접 쓸 수 없다. 파일 저장은 메인 오케스트레이터의 책임이다. 이 방식으로 메인 오케스트레이터가 핸드오프 전문을 컨텍스트에 중복 보관하지 않아 토큰 효율이 높다.
 
 ### 0.3 서브에이전트 = 메인이 Agent 도구로 띄운 독립 프로세스
 
@@ -96,20 +104,20 @@ CLAUDE.md / skill = "언제 어떤 에이전트를 호출해" 라고 적힌 규�
 ```
 [일반 서브에이전트 패턴]        [이 프로젝트: 실제 흐름]
 
-메인 (Sonnet)                  메인 (Sonnet) ← 오케스트레이터 + 구현 담당
-  ├─ 서브A (Sonnet)              ├─ planner  → Opus 서브에이전트 (스폰됨)
-  ├─ 서브B (Sonnet)              │               핸드오프 반환
-  └─ 서브C (Sonnet)              ├─ [구현]   → 메인 자체가 직접 처리
-                                 └─ reviewer → Opus 서브에이전트 (스폰됨)
-                                                 리뷰 결과 반환
+메인 (기본값)                  메인 (오케스트레이터) ← 라우팅 + 확인 게이트 + 파일 저장 담당
+  ├─ 서브A (기본값)              ├─ planner      → Opus 서브에이전트 → 핸드오프 반환
+  ├─ 서브B (기본값)              │                  └─ 오케스트레이터가 handoff.md 저장
+  └─ 서브C (기본값)              ├─ implementer  → Sonnet 서브에이전트 → handoff.md 읽고 구현
+                                 ├─ reviewer     → Opus 서브에이전트 → findings 반환
+                                 │                  └─ 오케스트레이터가 review_findings.md 저장
+                                 └─ implementer  → (not ready 시) review_findings.md 읽고 수정
 ```
 
-**주의**: `implementer-sonnet.md` 파일은 존재하지만, 실제 pickup/finish 흐름에서 자동으로 스폰되지 않는다. 메인 Claude(Sonnet)가 플래너 핸드오프를 받은 뒤 구현을 직접 수행한다. implementer-sonnet은 필요할 때 명시적으로 호출할 수 있는 에이전트 정의로만 존재한다.
-
 정리하면:
-- **서브에이전트** = 메커니즘 (독립 프로세스 격리). 이 프로젝트에서는 planner, reviewer만 실제 스폰
+- **서브에이전트** = 메커니즘 (독립 프로세스 격리). 이 프로젝트에서는 planner, implementer, reviewer 3개 모두 실제 스폰
 - **모델 스플릿** = 그 메커니즘 위의 최적화 전략 (비용 vs 품질)
-- **오케스트레이터** = 메인 Claude. 사용자와 대화하는 바로 그 인스턴스이며, 구현도 직접 담당
+- **오케스트레이터** = 메인 Claude. 사용자와 대화하는 바로 그 인스턴스이며, 라우팅과 확인 게이트만 담당
+- **파일 릴레이** = `.claude/state/` 파일로 에이전트 간 데이터 전달. 메인 컨텍스트 중복 적재 방지
 
 ---
 
@@ -152,7 +160,12 @@ name: planner-opus-4_6
 description: Plans HQN frontend Azure DevOps work...
 model: claude-opus-4-6          ← 모델 고정
 effort: high                    ← 추론 깊이 힌트 (높음)
-tools: Read, Glob, Grep, Bash, WebFetch, WebSearch   ← 사용 가능 도구
+disallowedTools: Write, Edit, MultiEdit, NotebookEdit,
+  mcp__azure-devops__wit_update_work_item,
+  mcp__azure-devops__repo_create_branch,
+  mcp__azure-devops__repo_create_pull_request,
+  mcp__azure-devops__repo_create_pull_request_thread,
+  mcp__azure-devops__wit_create_work_item
 skills:
   - hqn-frontend-guardrails     ← 로드할 스킬
 ---
@@ -165,11 +178,17 @@ skills:
 ---
 name: implementer-sonnet
 model: claude-sonnet-4-6        ← 모델 고정
-tools: Read, Glob, Grep, Edit, Write, Bash   ← 편집 도구 포함
+disallowedTools: NotebookEdit,
+  mcp__azure-devops__wit_update_work_item,
+  mcp__azure-devops__repo_create_branch,
+  mcp__azure-devops__repo_create_pull_request,
+  mcp__azure-devops__repo_create_pull_request_thread,
+  mcp__azure-devops__wit_create_work_item
 skills:
   - hqn-frontend-guardrails
 ---
 ```
+(implementer는 Edit/Write를 사용해야 하므로 allowlist 대신 ADO MCP 쓰기 도구만 차단)
 
 **reviewer-opus-4_6.md**:
 ```markdown
@@ -177,11 +196,18 @@ skills:
 name: reviewer-opus-4_6
 model: claude-opus-4-6
 effort: high
-tools: Read, Glob, Grep, Bash   ← 읽기 전용 도구만
+disallowedTools: Write, Edit, MultiEdit, NotebookEdit,
+  mcp__azure-devops__wit_update_work_item,
+  mcp__azure-devops__repo_create_branch,
+  mcp__azure-devops__repo_create_pull_request,
+  mcp__azure-devops__repo_create_pull_request_thread,
+  mcp__azure-devops__wit_create_work_item
 skills:
   - hqn-frontend-guardrails
 ---
 ```
+
+**설계 기준**: `tools:` allowlist 대신 `disallowedTools:` blocklist를 사용한다. 새 도구가 추가될 때 허용 목록을 매번 업데이트하지 않아도 되고, "이것만 못 쓴다"가 "이것만 쓸 수 있다"보다 에이전트 역할 의도를 더 명확하게 표현한다.
 
 ---
 
@@ -206,12 +232,12 @@ Claude Code에서 어떤 모델이 사용될지는 다음 순서로 결정된다
 
 이 프로젝트에서의 실제 흐름:
 
-| 컨텍스트 | 적용 규칙 | 실제 모델 | 스폰 여부 |
+| 컨텍스트 | 적용 규칙 | 실제 모델 | 스폰 시점 |
 |---------|---------|---------|---------|
-| 메인 대화 (사용자 ↔ Claude) | remote-settings.json `model: "sonnet"` | Sonnet 4.6 | - (메인 세션) |
-| planner 에이전트 | agents/planner-opus-4_6.md `model: claude-opus-4-6` | Opus 4.6 | 서브에이전트로 스폰 |
-| implementer 에이전트 | agents/implementer-sonnet.md `model: claude-sonnet-4-6` | Sonnet 4.6 | **스폰 안 됨** — 메인 세션이 직접 구현 |
-| reviewer 에이전트 | agents/reviewer-opus-4_6.md `model: claude-opus-4-6` | Opus 4.6 | 서브에이전트로 스폰 |
+| 메인 대화 (사용자 ↔ Claude) | remote-settings.json `model` 필드 (기본값 보통 sonnet, 세션 오버라이드 가능) | 세션 설정에 따름 | - (메인 세션) |
+| planner 에이전트 | agents/planner-opus-4_6.md `model: claude-opus-4-6` | Opus 4.6 | pickup에서 스폰 |
+| implementer 에이전트 | agents/implementer-sonnet.md `model: claude-sonnet-4-6` | Sonnet 4.6 | pickup에서 스폰 + finish에서 수정 시 재스폰 |
+| reviewer 에이전트 | agents/reviewer-opus-4_6.md `model: claude-opus-4-6` | Opus 4.6 | finish에서 스폰 |
 
 ---
 
@@ -219,13 +245,15 @@ Claude Code에서 어떤 모델이 사용될지는 다음 순서로 결정된다
 
 모델을 나눈 것만큼이나 **도구 접근 범위를 다르게 제한**한 것이 실용적으로 중요하다.
 
-| 에이전트 | 허용 도구 | 핵심 제한 |
+| 에이전트 | 차단된 도구 | 핵심 효과 |
 |---------|---------|---------|
-| planner-opus | Read, Glob, Grep, Bash(읽기), WebFetch, WebSearch | Edit, Write 없음 → 파일 수정 불가 |
-| implementer-sonnet | Read, Glob, Grep, Edit, Write, Bash | WebFetch, WebSearch 없음 → 외부 참조 불가 |
-| reviewer-opus | Read, Glob, Grep, Bash(읽기) | Edit, Write 없음 → 수정 불가 |
+| planner-opus | Write, Edit, MultiEdit + ADO MCP 5종 | 파일 수정 불가, ADO 직접 조작 불가 |
+| implementer-sonnet | ADO MCP 5종 | Edit/Write는 허용(구현 필요), ADO 직접 조작만 차단 |
+| reviewer-opus | Write, Edit, MultiEdit + ADO MCP 5종 | 파일 수정 불가, ADO 직접 조작 불가 |
 
-planner가 실수로 파일을 수정하거나, reviewer가 코드를 바꾸는 사고를 도구 레벨에서 원천 차단한다. 모델의 판단을 믿는 것이 아니라 도구 접근 자체를 막는 방식이다.
+ADO MCP 5종: `wit_update_work_item`, `repo_create_branch`, `repo_create_pull_request`, `repo_create_pull_request_thread`, `wit_create_work_item`
+
+planner가 실수로 파일을 수정하거나, reviewer가 코드를 바꾸는 사고를 도구 레벨에서 원천 차단한다. 모든 에이전트에서 ADO 쓰기 MCP를 차단해 MCP ADO 조작은 메인 오케스트레이터만 가능하며, 오케스트레이터도 `hqn_guard_mcp_ado.py` 훅의 토큰 검증을 통과해야 한다.
 
 ---
 
@@ -239,11 +267,13 @@ planner가 실수로 파일을 수정하거나, reviewer가 코드를 바꾸는 
 ---
 name: my-agent-name
 model: claude-opus-4-6        # 또는 claude-sonnet-4-6, claude-haiku-4-5-20251001
-tools: Read, Glob, Grep       # 생략하면 기본 도구 세트 전체
+disallowedTools: Write, Edit  # 차단할 도구 목록 (allowlist보다 blocklist 방식 권장)
 ---
 
 # 에이전트 역할 설명 및 시스템 프롬프트
 ```
+
+`tools:` allowlist도 지원되지만 이 프로젝트는 `disallowedTools:` blocklist를 채택한다. 새 도구가 추가될 때 허용 목록을 매번 업데이트하지 않아도 되기 때문이다.
 
 현재 사용 가능한 model 값 (2026-04 기준):
 - `claude-opus-4-6`
@@ -299,7 +329,7 @@ Agent(
 
 ### 5.1 현재 이 프로젝트의 구성
 
-메인 오케스트레이터(사용자와 직접 대화하는 Claude)는 `remote-settings.json`에 의해 **Sonnet**으로 고정되어 있다.
+메인 오케스트레이터(사용자와 직접 대화하는 Claude)의 기본 모델은 `remote-settings.json`의 `model` 필드로 결정된다. 회사 기본값이 Sonnet으로 설정되어 있어도, 세션 시작 시 `--model opus` 옵션으로 오버라이드할 수 있다. **서브에이전트(planner, implementer, reviewer)의 모델은 `agents/*.md` frontmatter에 고정**되어 메인 모델과 무관하게 항상 동일하다.
 
 ### 5.2 Sonnet 메인 오케스트레이터의 실제 제약
 
@@ -307,14 +337,13 @@ Agent(
 
 - 사용자 자연어 라우팅 ("일해라" → pickup 흐름 감지)
 - 에이전트 스폰 결정 및 지시
-- 에이전트 결과물 사용자에게 전달
+- 에이전트 결과물 사용자에게 전달 (압축된 결과만 전달받으므로 해석 부담 최소)
 - 확인 게이트 처리 (예/아니오 판단)
 - 간단한 git 명령 실행 및 결과 해석
 
-이런 작업들은 복잡한 추론보다는 패턴 인식과 흐름 제어에 가깝다.
+이런 작업들은 복잡한 추론보다는 패턴 인식과 흐름 제어에 가깝다. 파일 기반 릴레이로 핸드오프를 직접 해석하거나 요약할 필요가 없어져 Sonnet 메인의 부담이 더 줄었다.
 
 **실제로 문제가 생길 수 있는 시나리오**:
-- 플래너가 넘긴 핸드오프 결과를 메인이 해석해서 implementer에게 전달할 때, Sonnet이 핸드오프 내용을 잘못 요약하거나 중요 제약사항을 누락할 수 있다
 - 에이전트 결과가 엇갈리거나 충돌할 때 Sonnet이 판단을 내려야 하는 경우, 섬세한 판단이 필요하면 놓칠 수 있다
 - 비정상적인 에러 상황에서 복구 전략을 스스로 수립해야 할 때 추론 깊이가 부족할 수 있다
 
@@ -333,47 +362,6 @@ Agent(
 
 **비용 영향**:
 메인 오케스트레이터가 Opus가 되면, 사용자와의 대화 및 에이전트 간 조율 토큰이 모두 Opus 요금으로 처리된다. 이 부분은 보통 전체 토큰의 20~30% 정도를 차지하는데, 이를 Opus로 올리는 것은 비용 대비 효과가 크지 않을 가능성이 높다.
-
-### 5.4 메인이 직접 구현 vs implementer 자동 스폰
-
-현재 이 프로젝트의 기본 흐름은 **메인이 직접 구현**하는 방식이다. 하지만 `implementer-sonnet`을 자동 스폰하도록 바꾸는 것도 가능하다. 둘은 장단점이 분명하다.
-
-#### 메인이 직접 구현 (현재)
-
-**장점**
-- 대화 전체 컨텍스트를 그대로 유지하므로, 사용자가 이전에 말한 제약이나 pickup 과정의 특이사항을 구현 중에도 참조할 수 있다
-- 구현 도중 막히면 사용자에게 바로 질문할 수 있다
-- 서브에이전트 초기화 오버헤드가 없다
-- 구현 방향이 예상과 다를 때 사용자가 즉시 개입할 수 있다
-
-**단점**
-- 메인 컨텍스트가 길어질수록 핸드오프 내용이 희석될 수 있다
-- 메인이 guardrails를 잘못 해석하거나 범위를 벗어날 위험이 서브에이전트보다 높을 수 있다. 서브에이전트는 핸드오프만 보고 시작하므로 구현 범위에 더 집중하기 쉽다
-
-#### implementer-sonnet 자동 스폰
-
-**장점**
-- 서브에이전트는 핸드오프 문서만 보고 시작하므로 잡음 없이 구현에 집중할 수 있다
-- 도구 제한이 명시적으로 걸린다 (Edit, Write, Bash만. WebFetch 없음)
-- 구현 결과가 독립된 리포트로 반환되어 메인이 검토하기 쉬워진다
-- 메인 컨텍스트가 구현 과정의 파일 읽기/쓰기 토큰으로 오염되지 않는다
-
-**단점**
-- 서브에이전트는 대화 맥락을 모르므로, 사용자가 pickup 중에 "이 부분은 나중에 바꿀 거니까 건드리지 마" 같은 말을 했어도 implementer는 그 정보를 모를 수 있다
-- 구현 중 막히면 서브에이전트가 멈추고 메인에 결과를 반환해야 해서 사용자 소통 루프가 한 단계 더 생긴다
-- 구현이 실패하거나 잘못된 방향으로 가도 완료될 때까지 중간 개입이 어렵다
-- 플래너 핸드오프를 거의 verbatim으로 전달해야 하므로, 핸드오프 품질이 낮으면 implementer가 잘못된 방향으로 완주할 수 있다
-
-#### 자동 스폰으로 바꾸면 생기는 트레이드오프
-
-| 항목 | 현재 (메인이 직접 구현) | implementer 자동 스폰 |
-|------|--------------------------|------------------------|
-| 컨텍스트 | 메인이 대화 전체를 기억 | 서브에이전트는 핸드오프만 봄 |
-| 사용자 개입 | 구현 중 메인에게 바로 질문 가능 | 서브에이전트 종료 후에야 소통 |
-| 중단 처리 | 즉시 가능 | 서브에이전트 실행 중엔 어렵다 |
-| 비용 | 추가 컨텍스트 초기화 없음 | 서브에이전트 컨텍스트 초기화 비용 추가 |
-
-구현이 단순하고 핸드오프만으로 완결될 때는 자동 스폰이 더 깔끔할 수 있다. 반대로 구현 중 사용자와 소통이 필요하거나 예외 상황이 잦으면 메인이 직접 하는 편이 더 유연하다.
 
 ---
 
@@ -445,6 +433,8 @@ Serena 경로:    ~2,400 토큰
 
 planner가 Opus로 실행되는 이 구조에서는 탐색 토큰이 Opus 요금으로 과금된다. 파일이 크고 관련 파일 수가 많을수록 Serena의 토큰 억제 효과가 비용에 직접 기여한다.
 
+**2026-04-30 업데이트**: 세션 리뷰 분석(#69731) 결과 planner가 Serena 대신 Grep을 사용하는 패턴이 반복됨이 확인됐다. `planner-opus-4_6.md`에 `## Tool usage rules` 섹션을 추가해 심볼 검색 시 Grep 명시적 금지 하드 규칙을 적용했다. 기존 guardrails의 "Prefer Serena" 권고 수준에서 에이전트 지침의 하드 규칙으로 격상됨.
+
 ### 6.5 솔직한 평가
 
 이 전략이 항상 비용을 절감한다고 단언하기 어렵다. 효과는 이런 조건에서 더 확실하다:
@@ -477,7 +467,49 @@ Claude Code 기능이기 때문에 외부 라이브러리나 별도 인프라는
 
 ---
 
-## 8. 참고: 관련 파일 목록
+## 8. implementer-sonnet 자동 스폰: 현재 구현
+
+implementer-sonnet은 pickup과 finish 양쪽에서 자동으로 스폰된다.
+
+### 8.1 pickup에서의 스폰
+
+planner가 핸드오프를 `.claude/state/handoff.md`에 저장한 뒤, 사용자 확인을 받고 implementer-sonnet을 스폰한다. implementer는 파일에서 핸드오프를 읽으므로, 메인 오케스트레이터가 핸드오프 전문을 컨텍스트에 보관할 필요가 없다.
+
+### 8.2 finish에서의 재스폰 (리뷰 수정 루프)
+
+reviewer가 "not ready" 판정을 내리면, findings를 텍스트로 반환한다. **메인 오케스트레이터**가 이 findings를 `.claude/state/review_findings.md`에 저장한다 (reviewer는 Write/Edit이 disallowedTools라 직접 쓸 수 없다). 사용자가 수정을 확인하면 implementer-sonnet을 재스폰하고, implementer는 `review_findings.md` + `handoff.md` 두 파일을 읽고 수정한다. 수정 후 reviewer를 1회만 재스폰한다. 두 번째 리뷰도 통과 못하면 중단하고 사용자에게 결정을 넘긴다.
+
+### 8.3 자동 스폰의 트레이드오프 (참고)
+
+**장점**:
+- 컨텍스트 격리 — 핸드오프만 보고 깨끗한 상태에서 구현
+- 도구 제한 강제 — Edit, Write, Bash만 허용, WebFetch 없음
+- 메인 컨텍스트가 구현 과정의 파일 읽기/쓰기 토큰으로 오염되지 않음
+- 출력 압축 — 압축된 결과 리포트로 메인 컨텍스트 팽창 억제
+
+**단점**:
+- 서브에이전트는 대화 맥락을 모름 — 사용자가 구두로 전달한 조건은 핸드오프에 포함되지 않으면 누락
+- 구현 중 막히면 서브에이전트 완료 후에야 사용자 소통 가능
+- 핸드오프 품질이 낮으면 잘못된 방향으로 완주할 위험
+
+### 8.4 토큰 효율 최적화 요약
+
+| 최적화 | 적용 위치 | 효과 |
+|-------|---------|------|
+| 파일 기반 핸드오프 릴레이 | 오케스트레이터 → `.claude/state/handoff.md` | 메인 컨텍스트에 핸드오프 2중 적재 방지 |
+| 파일 기반 리뷰 결과 릴레이 | 오케스트레이터 → `.claude/state/review_findings.md` | 수정 루프 시 메인 컨텍스트 부담 감소 |
+| Diff-first 리뷰 | reviewer | Opus 토큰 절감 (전체 파일 Read 대신 git diff) |
+| 에이전트 출력 압축 | implementer, reviewer | 메인 컨텍스트 팽창 억제 |
+| Scoped lint | implementer, finish | 변경 파일만 lint → 시간 + 출력 토큰 절감 |
+| yarn tsc --noEmit | implementer, finish | lint가 잡지 못하는 타입 에러 조기 검출 |
+| 결정론적 preflight | finish (reviewer 스폰 전) | 브랜치 패턴/금지 경로/tsc/lint 실패 시 Opus reviewer 스폰 생략 |
+| PostToolUse 세션당 1회 주입 | hqn_after_edit_context.py | 반복 편집 시 컨텍스트 누적 없이 리마인더 효과 유지 |
+| Light mode | pickup (단순 태스크) | i18n/CSS 등 단순 변경은 planner+reviewer Opus 호출 없이 완료 |
+| Serena 심볼 탐색 | planner | Opus 파일 탐색 토큰 8~9배 절감 |
+
+---
+
+## 10. 참고: 관련 파일 목록
 
 | 파일 | 역할 |
 |------|------|

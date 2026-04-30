@@ -1,6 +1,7 @@
 # Claude Code HQN Frontend 자동화 워크플로우 상세 가이드
 
 > 작성일: 2026-04-23
+> 갱신: 2026-04-30 — 훅 fail-safe/fail-open 분리 반영, ADO WI 연결 방식 수정
 > 대상 프로젝트: NEO Frontend (HQN 제품)
 > 목적: "일해라" 한 마디로 ADO 태스크 픽업 → 구현 → PR까지 자동화되는 워크플로우의 기술 구성과 장단점 정리
 
@@ -15,7 +16,7 @@
 [CLAUDE.md 자연어 라우팅]
     │  "일해라" → pickup 흐름 감지
     ▼
-[planner-opus-4_6 에이전트]
+[메인 오케스트레이터]
     │  Azure DevOps MCP로 할당된 Work Item 목록 조회
     │  사용자에게 선택 요청 (확인 게이트 #1)
     ▼
@@ -23,29 +24,51 @@
     │  Work Item → "In Progress"
     │  product/hqn/main 기반 작업 브랜치 생성
     ▼
-[planner-opus-4_6 에이전트]
+[planner-opus-4_6 서브에이전트]
     │  Serena MCP로 코드베이스 심층 분석
-    │  구현 계획(핸드오프) 작성
+    │  구현 계획(핸드오프) 텍스트 반환
     │  영향 범위, 수정 대상 파일 식별
     ▼
-[implementer-sonnet 에이전트]
-    │  계획대로 코드 구현
+[메인 오케스트레이터]
+    │  핸드오프를 .claude/state/handoff.md 에 저장 (오케스트레이터 책임)
+    ▼
+사용자 확인: "구현을 시작할까요?"
+    ▼
+[implementer-sonnet 서브에이전트]
+    │  .claude/state/handoff.md 읽고 구현
     │  파일 수정/생성
-    │  lint, 빌드 검증
+    │  scoped lint + yarn tsc --noEmit 검증
+    │  압축된 결과 리포트 반환
     ▼
-사용자: "마무리" / "끝내"
-    │
+사용자 확인: "바로 리뷰와 커밋을 진행할까요?" (또는 별도로 "마무리")
     ▼
-[reviewer-opus-4_6 에이전트]
-    │  변경사항 전체 리뷰
+[Deterministic Preflight] ← 저렴한 사전 체크로 Opus 스폰 최소화
+    │  ① 브랜치명 패턴 검증 (product/hqn/{type}/{숫자})
+    │  ② 금지 경로 변경 여부 (src/pages, src/shared)
+    │  ③ yarn tsc --noEmit
+    │  ④ yarn lint (scoped)
+    │  실패 시 → 사용자에게 보고, reviewer 스폰 안 함
+    ▼
+[reviewer-opus-4_6 서브에이전트]
+    │  git diff 기반 리뷰 (전체 파일 읽기 최소화)
     │  guardrails 준수 여부 확인
-    │  사용자에게 최종 승인 요청 (확인 게이트 #2)
+    │  verdict: ready / ready with caveats / not ready
+    │  not ready 시 → findings 텍스트 반환
     ▼
-[neo-commit-helper 스킬]
-    │  NEO 커밋 컨벤션으로 커밋 메시지 생성
-    │  커밋 + push
+[메인 오케스트레이터]
+    │  not ready 시: findings를 .claude/state/review_findings.md 에 저장
     ▼
-[Azure DevOps MCP]
+[verdict 분기]
+    ├─ ready ──────────────────▶ 사용자 최종 승인 (확인 게이트 #2)
+    ├─ ready with caveats ────▶ caveats 표시 → 사용자 최종 승인
+    └─ not ready ─────────────▶ "수정할까요?" → implementer-sonnet 재스폰
+                                 → 재리뷰 (1회 제한)
+    ▼
+[메인 오케스트레이터]
+    │  finish_approval 토큰 발급 (hqn_finish_approval.py)
+    │  NEO 커밋 컨벤션으로 커밋 메시지 생성 → git commit + push
+    ▼
+[Azure DevOps MCP 또는 az CLI]
     │  product/hqn/main 대상 Draft PR 생성
     ▼
 완료
@@ -60,13 +83,13 @@
 **역할**: 전체 오케스트레이터. 사용자의 자연어 입력을 받아 각 에이전트와 MCP 서버를 조율한다.
 
 - **실행 위치**: 로컬 터미널 (IDE 확장 또는 CLI)
-- **모델 기본값**: `sonnet` (remote-settings.json에서 회사 전체 적용)
+- **모델 기본값**: `remote-settings.json`의 `model` 필드로 결정. 회사 기본값은 보통 sonnet이지만 세션 시작 시 `--model opus`로 오버라이드 가능
 - **컨텍스트 지속성**: 대화 세션 동안 작업 맥락 유지, 자동 압축으로 긴 대화도 처리
 
 ```json
-// ~/.claude/remote-settings.json (회사 원격 정책)
+// ~/.claude/remote-settings.json (회사 원격 정책 예시)
 {
-  "model": "sonnet",          // 기본 모델 = 저렴한 Sonnet
+  "model": "sonnet",          // 기본 모델 = 저렴한 Sonnet (개인이 --model opus로 오버라이드 가능)
   "channelsEnabled": true,    // 회사 원격 정책 적용
   "permissions": {
     "deny": ["Read(./.env)", "Read(./secrets/**)"]  // 보안: 민감 파일 읽기 차단
@@ -74,20 +97,28 @@
 }
 ```
 
+서브에이전트(planner, implementer, reviewer)의 모델은 `agents/*.md`의 frontmatter에서 고정되므로 메인 오케스트레이터 모델과 무관하게 항상 동일하다.
+
 ---
 
 ### 2.2 모델 분리 전략 (Opus vs Sonnet)
 
 핵심 설계 원칙: **비싼 모델은 생각에, 싼 모델은 실행에**
 
-| 에이전트 | 사용 모델 | 역할 | 이유 |
-|---------|---------|------|------|
-| `planner-opus-4_6` | Claude Opus 4.6 | ADO 분석, 코드베이스 탐색, 구현 계획 수립 | 복잡한 추론, 아키텍처 이해, 실수 비용이 큼 |
-| `implementer-sonnet` | Claude Sonnet 4.6 | 실제 코드 작성, 파일 수정, 빌드 검증 | 반복적 실행 작업, 토큰 소비 많음 |
-| `reviewer-opus-4_6` | Claude Opus 4.6 | PR 전 최종 코드 리뷰 | 품질 검증은 정확도가 중요 |
-| 메인 오케스트레이터 | Claude Sonnet 4.6 | 사용자 대화, 라우팅 | 기본 진행, 원격 정책 기본값 |
+| 에이전트 | 사용 모델 | 스폰 시점 | 역할 | 이유 |
+|---------|---------|---------|------|------|
+| `planner-opus-4_6` | Claude Opus 4.6 | pickup | ADO 분석, 코드베이스 탐색, 구현 계획 수립 | 복잡한 추론, 아키텍처 이해, 실수 비용이 큼 |
+| `implementer-sonnet` | Claude Sonnet 4.6 | pickup + finish(수정 시) | 실제 코드 작성, 파일 수정, scoped lint 검증 | 반복적 실행 작업, 토큰 소비 많음 |
+| `reviewer-opus-4_6` | Claude Opus 4.6 | finish | git diff 기반 최종 코드 리뷰 | 품질 검증은 정확도가 중요 |
+| 메인 오케스트레이터 | Claude Sonnet 4.6 | - | 사용자 대화, 라우팅, 확인 게이트 처리 | 기본 진행, 원격 정책 기본값 |
 
 **실제 비용 효과**: Opus는 Sonnet 대비 약 5배 비싸므로, 단순 코드 생성 토큰 비용을 Sonnet으로 처리해 전체 비용을 크게 절감.
+
+**추가 토큰 최적화**:
+- 핸드오프/리뷰 결과는 `.claude/state/` 파일로 릴레이 → 메인 컨텍스트에 중복 적재하지 않음
+- reviewer는 `git diff` 기반 리뷰 → Opus로 전체 파일을 읽는 비용 회피
+- 모든 에이전트 출력은 압축 형식 → 메인 컨텍스트 팽창 억제
+- Verification은 변경 파일만 scoped lint 우선 적용
 
 ---
 
@@ -114,17 +145,21 @@
 `~/.claude/skills/` 에 정의된 프로젝트/팀 특화 명령어 모음.
 
 ```
-~/.claude/skills/
-├── hqn-ado-pickup-task      # 태스크 픽업 전체 플로우
-├── hqn-ado-finish-task      # 태스크 완료 전체 플로우
-└── hqn-frontend-guardrails  # 안전 규칙 (브랜치 보호, 확인 게이트 등)
+frontend/.claude/skills/       ← 프로젝트 로컬 스킬 (레포에 체크인)
+├── hqn-ado-pickup-task/       # 태스크 픽업 전체 플로우 (상세 지침)
+├── hqn-ado-finish-task/       # 태스크 완료 전체 플로우 (상세 지침)
+├── hqn-frontend-guardrails/   # 소프트 안전 규칙 (브랜치 보호, 확인 게이트 등)
+├── pickup/                    # "일해라" 자연어 단축어 → hqn-ado-pickup-task 라우팅 (5줄)
+├── finish/                    # "마무리" 자연어 단축어 → hqn-ado-finish-task 라우팅 (5줄)
+└── tasks/                     # 할당 태스크 목록만 조회 (5줄)
 ```
 
 **guardrails 역할** (hqn-frontend-guardrails):
-- `product/hqn/main` 직접 push 차단
-- 확인 없이 ADO 상태 변경 차단
-- 확인 없이 브랜치 생성 차단
-- 커밋 전 반드시 사용자 최종 승인 요구
+- 커밋 메시지 형식 강제 (`[HQN][FE]✨feat: ...`)
+- Serena 우선 사용 권고 (planner/implementer/reviewer 공통 참조)
+- ADO 고정값 (organization=neurophet, project=MWA)
+- 허용 브랜치 패턴 명시
+- 편집 금지 경로 명시 (src/pages, src/shared)
 
 ---
 
@@ -137,9 +172,8 @@
 ├── wit_my_work_items          # 내 할당 Work Item 조회
 ├── wit_update_work_item       # 상태 변경 (→ In Progress)
 ├── repo_create_branch         # 작업 브랜치 생성
-├── repo_create_pull_request   # Draft PR 생성
-├── repo_get_branch_by_name    # 브랜치 존재 확인
-└── wit_link_work_item_to_pull_request  # WI-PR 연결
+├── repo_create_pull_request   # Draft PR 생성 (workItems 파라미터로 WI 연결)
+└── repo_get_branch_by_name    # 브랜치 존재 확인
 ```
 
 **ADO 컨텍스트 고정값**:
@@ -179,11 +213,20 @@
 Claude Code의 `Agent` 도구로 독립 서브에이전트를 스폰. 각 에이전트는 완전히 독립된 컨텍스트를 가진다.
 
 ```
-메인 Claude (Sonnet, 오케스트레이터)
-    ├── [병렬] planner-opus-4_6  ─── ADO 조회 + 코드베이스 분석
-    ├── [순차] implementer-sonnet ─── 실제 구현
-    └── [순차] reviewer-opus-4_6 ─── 완료 후 리뷰
+메인 Claude (오케스트레이터)
+    │  ADO 조회, 사용자 확인 게이트, 브랜치 생성, 파일 저장을 직접 수행
+    │
+    ├── [pickup] planner-opus-4_6  ─── 코드베이스 분석 → 핸드오프 텍스트 반환
+    │                                    └─ 오케스트레이터가 .claude/state/handoff.md 에 저장
+    ├── [pickup] implementer-sonnet ─── handoff.md 읽고 구현 → 압축 결과 반환
+    │
+    ├── [finish] preflight check ─── branch/path/tsc/lint 확인 (저렴)
+    ├── [finish] reviewer-opus-4_6 ─── git diff 기반 리뷰 → verdict + findings 반환
+    │                                    └─ not ready 시 오케스트레이터가 .claude/state/review_findings.md 에 저장
+    └── [finish] implementer-sonnet ─── review_findings.md + handoff.md 읽고 수정 (리뷰 not ready 시만)
 ```
+
+**핵심 설계**: 에이전트 간 데이터 전달은 `.claude/state/` 파일을 통해 이루어진다. planner와 reviewer는 파일을 직접 쓰지 않고(disallowedTools: Write, Edit) 텍스트를 반환하며, 메인 오케스트레이터가 파일에 저장한다. 이 방식으로 메인 컨텍스트에 핸드오프/findings를 중복 보관하지 않아 토큰 효율이 높다.
 
 **서브에이전트 격리**: `isolation: "worktree"` 옵션으로 임시 git worktree에서 작업 가능 (실험적 변경사항 격리).
 
@@ -339,7 +382,7 @@ CLAUDE.md, skills, remote-settings.json, 에이전트 정의 등 설정 파일�
 # 사용자 입력
 > 일해라
 
-# planner-opus-4_6 실행
+# 메인 오케스트레이터
 → ADO MCP: wit_my_work_items 호출
 → 할당된 Work Item 목록 표시:
   #68900 - CTA 3D 렌더링 프리셋 기능 구현
@@ -350,37 +393,43 @@ CLAUDE.md, skills, remote-settings.json, 에이전트 정의 등 설정 파일�
 
 # 확인 게이트 #1
 Claude: "#68900 CTA 3D 렌더링 프리셋 기능 구현을 시작할까요?
-        브랜치: feature/hqn/68900-cta-preset
+        브랜치: product/hqn/feature/68900
         베이스: product/hqn/main"
 > 네
 
-# planner-opus-4_6
-→ Serena: get_symbols_overview("src/products/hqn/components/analysis/result/content/cta/")
+# planner-opus-4_6 (서브에이전트 스폰)
+→ Serena: get_symbols_overview("src/products/hqn/...")
 → find_symbol("CTAMultiViewer", include_body=False, depth=1)
 → 영향 심볼 파악 후 구현 계획 작성
+→ .claude/state/handoff.md 에 핸드오프 저장
 
-# implementer-sonnet
-→ 계획에 따라 파일 수정
-→ yarn lint 실행
-→ 빌드 검증
+# 구현 확인
+Claude: "플래너 계획이 준비됐습니다. 지금 바로 구현을 시작할까요?"
+> 네
 
-# 사용자 입력
-> 마무리
+# implementer-sonnet (서브에이전트 스폰)
+→ .claude/state/handoff.md 읽고 계획에 따라 파일 수정
+→ scoped lint 실행 (변경 파일만)
+→ 압축 결과 반환: "CTAMultiViewer.tsx, CTAPresetPanel.tsx 수정. yarn lint: pass"
 
-# reviewer-opus-4_6
-→ 변경사항 전체 검토
-→ guardrails 준수 확인
+# finish 연결 확인
+Claude: "구현이 완료됐습니다. 바로 리뷰와 커밋을 진행할까요?"
+> 네
+
+# reviewer-opus-4_6 (서브에이전트 스폰)
+→ git diff 기반 리뷰 (전체 파일 Read 최소화)
+→ verdict: ready
 
 # 확인 게이트 #2
 Claude: "변경 파일: CTAMultiViewer.tsx, CTAPresetPanel.tsx
          커밋하고 Draft PR을 생성할까요?"
 > 네
 
-# neo-commit-helper + ADO MCP
-→ 커밋: "[HQN][CTA]✨feat: 3D 렌더링 프리셋 기능 구현 [#68900]"
-→ push origin feature/hqn/68900-cta-preset
-→ repo_create_pull_request: Draft PR → product/hqn/main
-→ wit_link_work_item_to_pull_request: WI #68900 연결
+# 메인 오케스트레이터 직접 실행
+→ hqn_finish_approval.py approve → finish_approval 토큰 발급
+→ git commit -m "[HQN][FE]✨feat: 3D 렌더링 프리셋 기능 구현 [#68900]"
+→ git push origin product/hqn/feature/68900
+→ ADO MCP repo_create_pull_request: Draft PR → product/hqn/main (workItems 파라미터로 WI #68900 연결)
 ```
 
 ---
@@ -393,5 +442,7 @@ Claude: "변경 파일: CTAMultiViewer.tsx, CTAPresetPanel.tsx
 | HQN FE 규칙 | `/Users/cheesu/IdeaProjects/neo/frontend/CLAUDE.md` | HQN 프론트엔드 특화 규칙 |
 | 원격 정책 | `~/.claude/remote-settings.json` | 회사 Claude 정책 (model=sonnet 등) |
 | 로컬 설정 | `~/.claude/settings.local.json` | 개인 권한 설정 |
-| 커스텀 스킬 | `~/.claude/skills/` | pickup/finish/guardrails |
+| 커스텀 스킬 | `frontend/.claude/skills/` | pickup/finish/guardrails |
+| 에이전트 정의 | `frontend/.claude/agents/` | planner/implementer/reviewer |
+| 상태 파일 | `frontend/.claude/state/` | 승인 토큰, 핸드오프, 리뷰 결과 |
 | 메모리 | `~/.claude/projects/-Users-cheesu-IdeaProjects-neo/memory/` | 세션 간 프로젝트 맥락 |

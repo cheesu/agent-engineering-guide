@@ -10,9 +10,9 @@
 
   // ──────────────────────────── State ────────────────────────────
   const MD_FILES = {
-    workflow: 'CLAUDE_CODE_WORKFLOW.md',
-    model: 'CLAUDE_CODE_MODEL_SPLIT.md',
-    harness: 'CLAUDE_CODE_HARNESS_ENGINEERING.md',
+    workflow: 'docs/CLAUDE_CODE_WORKFLOW.md',
+    model: 'docs/CLAUDE_CODE_MODEL_SPLIT.md',
+    harness: 'docs/CLAUDE_CODE_HARNESS_ENGINEERING.md',
   };
 
   const state = {
